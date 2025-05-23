@@ -42,8 +42,8 @@ parser.add_argument('-n','--normalization', type=str, help=f'Normalization of th
 													'\t-\'all\': with respect to all contributions.\n'
 													'\t-\'selection\': with respect to selection only\n', choices=['all','selection'], default='selection')
 parser.add_argument('-l','--max-l',type=int,default=1,choices=[1,2,3],help='Maximum value of l (angular momemtum) for the projection. Increases computational costs, so increase it only if necessary.')
-parser.add_argument('-m','--emin', type=float, help='Minimum of energy in the plot. If none, it chooses the lower limit', default=None)
-parser.add_argument('-M','--emax', type=float, help='Maximum of energy in the plot. If none, it chooses the upper limit', default=None)
+parser.add_argument('-e','--emin', type=float, help='Minimum of energy in the plot. If none, it chooses the lower limit', default=None)
+parser.add_argument('-E','--emax', type=float, help='Maximum of energy in the plot. If none, it chooses the upper limit', default=None)
 parser.add_argument('-s','--scale', type=float, help='DOS scale factor', default=2.0)
 parser.add_argument('-H','--height', type=float, help='Height of the plot in inches', default=3.5)
 parser.add_argument('-W','--width', type=float, help='Width of the plot in inches', default=3.3)
