@@ -4,6 +4,7 @@ import pymatgen
 import sys
 import argparse
 import logging
+import os.path
 
 from pymatgen.io.vasp.outputs import Procar, Vasprun
 from pymatgen.io.vasp.inputs import Kpoints
@@ -56,10 +57,19 @@ parser.add_argument('--glw','--grid-lw', type=float, help='Linewidth of grid. Se
 parser.add_argument('-f','--font-size', type=float, help='Fontsize', default=7)
 parser.add_argument('-o','--output-file', type=str, help='Path and name of the output file, excluding the format', default='fatbands')
 parser.add_argument('--format', type=str, help='Output file format', choices=['pdf','png'], default='pdf')
+parser.add_argument('--redo','--readlog',  help='Rerun the last command, if plot_fatbands.log file is present. This overrides every other argument!', action='store_true')
 
 args = parser.parse_args()
-scale=args.scale
-no_proj=args.no_projection
+
+if args.redo is True:
+    if os.path.isfile('plot_fatbands.log') is False:
+        raise ValueError('I cannot rerun: plot_fatbands.log does not exist')
+
+    with open('plot_fatbands.log') as f:
+        argstr = f.readline()
+
+    args = parser.parse_args(argstr.split()[1:])   
+
 
 logging.basicConfig(
     filename="plot_fatbands.log",
@@ -68,7 +78,15 @@ logging.basicConfig(
     format="%(message)s",
 )
 
-logging.info(" ".join(sys.argv[:]))
+if args.redo is True:
+    logging.info(argstr)
+else:
+    logging.info(" ".join(sys.argv[:]))
+
+scale=args.scale
+no_proj=args.no_projection
+
+
 
 # plot colored line. Function written by Kevin Waters
 def rgbline(ax, KPOINTS, e, red, green, blue, alpha=1.):
@@ -369,4 +387,3 @@ if __name__ == "__main__":
     # Plotting 
     # -----------------
     plt.savefig(f"{args.output_file}.{args.format}", format=args.format, bbox_inches='tight')
-
