@@ -2,6 +2,7 @@ numpy
 math
 pymatgen
 sys
+os
 argparse
 logging
 matplotlib
