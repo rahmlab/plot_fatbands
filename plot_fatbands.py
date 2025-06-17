@@ -51,7 +51,7 @@ parser.add_argument('-H','--height', type=float, help='Height of the plot in inc
 parser.add_argument('-W','--width', type=float, help='Width of the plot in inches', default=3.3)
 parser.add_argument('-r','--ratio', type=float, help='Bandplot - dosplot width ratio', default=3.0)
 parser.add_argument('--plw','--plot-lw', type=float, help='Linewidth of bands and total DOS', default=2.0)
-parser.add_argument('--vlw','--lines-lw', type=float, help='Linewidth of vertical lines. Set it to 0 to remove them', default=2.0)
+parser.add_argument('--vlw','--lines-lw', type=float, help='Linewidth of vertical lines. Set it to 0 to remove them', default=1.0)
 parser.add_argument('--flw','--Fermi-lw', type=float, help='Linewidth of Fermi level. Set it to 0 to remove it', default=1.0)
 parser.add_argument('--glw','--grid-lw', type=float, help='Linewidth of grid. Set it to 0 to remove them', default=1.0)
 parser.add_argument('-f','--font-size', type=float, help='Fontsize', default=7)
