@@ -373,7 +373,9 @@ if __name__ == "__main__":
         dosrun.tdos.energies - dosrun.efermi,
         color = (0.6, 0.6, 0.6),
         label = DOSlabel, lw=args.plw)
-    ax2.legend(fancybox=False, shadow=False, prop={'size': args.font_size-1},labelspacing=0.15,borderpad=0.20,handlelength=1.2,framealpha=0.6)
+
+    if no_proj is False:
+        ax2.legend(fancybox=False, shadow=False, prop={'size': args.font_size-1},labelspacing=0.15,borderpad=0.20,handlelength=1.2,framealpha=0.6)
 
     # scaling factor for the x axis limit, if the peaks are too high
     maxdos = max(dosrun.tdos.densities[Spin.up])/scale
