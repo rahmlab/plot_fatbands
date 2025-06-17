@@ -52,7 +52,7 @@ parser.add_argument('-W','--width', type=float, help='Width of the plot in inche
 parser.add_argument('-r','--ratio', type=float, help='Bandplot - dosplot width ratio', default=3.0)
 parser.add_argument('--plw','--plot-lw', type=float, help='Linewidth of bands and total DOS', default=2.0)
 parser.add_argument('--vlw','--lines-lw', type=float, help='Linewidth of vertical lines. Set it to 0 to remove them', default=2.0)
-parser.add_argument('--flw','--Fermi-lw', type=float, help='Linewidth of Fermi level. Set it to 0 to remove it', default=2.0)
+parser.add_argument('--flw','--Fermi-lw', type=float, help='Linewidth of Fermi level. Set it to 0 to remove it', default=1.0)
 parser.add_argument('--glw','--grid-lw', type=float, help='Linewidth of grid. Set it to 0 to remove them', default=1.0)
 parser.add_argument('-f','--font-size', type=float, help='Fontsize', default=7)
 parser.add_argument('-o','--output-file', type=str, help='Path and name of the output file, excluding the format', default='fatbands')
@@ -387,3 +387,6 @@ if __name__ == "__main__":
     # Plotting 
     # -----------------
     plt.savefig(f"{args.output_file}.{args.format}", format=args.format, bbox_inches='tight')
+
+    print('\tFile saved.')
+    print('-----------------------------------------------------------')
