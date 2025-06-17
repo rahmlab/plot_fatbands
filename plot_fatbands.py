@@ -341,7 +341,7 @@ if __name__ == "__main__":
 
     # style
     ax1.set_ylabel(r"$E - E_f$ (eV)",labelpad=-2) 	#labelpad might work bad
-    ax1.grid(lw=args.glw)
+    ax1.grid(lw=args.glw,alpha=0.5)
 
     # fermi level line at 0
     ax1.hlines(y=0, xmin=0, xmax=len(bands.kpoints), color="k", lw=args.flw)
@@ -358,10 +358,12 @@ if __name__ == "__main__":
 
     if no_proj is False:
         CalculateProjections()
+	DOSlabel = 'total'
     else:
         print('\tNo projection requested. Plotting normal bands.')
         for b in range(bands.nb_bands): 
             ax1.plot(KPOINTS,[e - bands.efermi for e in bands.bands[Spin.up][b]], lw=args.plw, color='k')
+        DOSlabel = None
 
     ax2.fill_betweenx(dosrun.tdos.energies - dosrun.efermi,
         0,dosrun.tdos.densities[Spin.up],
@@ -370,7 +372,7 @@ if __name__ == "__main__":
     ax2.plot(dosrun.tdos.densities[Spin.up],
         dosrun.tdos.energies - dosrun.efermi,
         color = (0.6, 0.6, 0.6),
-        label = "total DOS", lw=args.plw)
+        label = DOSlabel, lw=args.plw)
     ax2.legend(fancybox=False, shadow=False, prop={'size': args.font_size-1},labelspacing=0.15,borderpad=0.20,handlelength=1.2,framealpha=0.6)
 
     # scaling factor for the x axis limit, if the peaks are too high
@@ -378,7 +380,7 @@ if __name__ == "__main__":
 
     
     ax2.set_yticklabels([])
-    ax2.grid(lw=args.glw)
+    ax2.grid(lw=args.glw,alpha=0.5)
     ax2.set_xticks([])
     ax2.set_xlim(0,maxdos)
     ax2.hlines(y=0, xmin=0, xmax=maxdos, color="k", lw=args.flw)
