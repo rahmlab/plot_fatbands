@@ -34,14 +34,17 @@ parser.add_argument('-O','--PROCAR-file', type=str, help='Path of the PROCAR fil
 parser.add_argument('-P','--POTCAR-file', type=str, help='Path of the POTCAR file', default='../../POTCAR')
 parser.add_argument('-D','--vasprun-file-dos', type=str, help='Path of the vasprun.xml file of the dos calculation', default='../dos/vasprun.xml')
 parser.add_argument('-p','--project', help='Band projection to rgb. Either 2 (red and green) or 3 arguments (red, green, blue). Nomenclature:\n'
-													'\t- E: all orbitals of element with symbol E (H, C, N, O, ...)\n'
-                                                    '\t- E.o: o-orbital of element with symbol E (s, px, py, pz, dxy, ...)\n'
-                                                    '\t- E.s.pz: s+pz orbitals of element with symbol E\n'
-                                                    '\t- X.s: s orbitals of all elements (literal X)\n'
+													'\t- E/n: all orbitals of element with symbol E (H, C, N, ...) or atom index n (1, 2, ...)\n'
+                                                    '\t- E/n.o: o-orbital of element with symbol E or atom index n (s, px, py, pz, dxy, ...)\n'
+                                                    '\t- E/n.s.pz: s+pz orbitals of element with symbol E or atom index n\n'
+                                                    '\t- X.s: s orbitals of all elements (literally X, see example)\n'
                                                     '\t- O.s.pz+N.pz: sum of O(s,pz) and N(pz)\n'
-                                                    'Example:\n'
+                                                    'You are free to mix anything you want. There is no restriction.\n'
+                                                    'Examples (a number represents an atom index, starting from 1, as in PROCAR):\n'
                                                     '\t-p N O.s.pz+H.s C+X.pz =>'
                                                     ' red: N(all orb.), green: O(s+pz)+H(s), blue: C(all orb.)+(all atoms pz)\n'
+                                                    '\t-p 1+2+3 4.px.py.pz+5 H.s  =>'
+                                                    ' red: 1(all orb.)+2(all orb.)+3(all orb.), green: 4(px+py+pz)+5+(px), blue: H(s)\n'
                                                     , nargs='+', default=['X.px', 'X.py', 'X.s.pz'])
 parser.add_argument('-n','--normalization', type=str, help=f'Normalization of the projection.\n'
 													'\t-\'all\': with respect to all contributions.\n'
@@ -106,37 +109,49 @@ def rgbline(ax, KPOINTS, e, red, green, blue, alpha=1.):
 
 
 def CalculateProjections():
-    # accepts only 2 or 3 entries for the projection
-    if no_proj is False and ( len(args.project) != 2 and len(args.project) != 3 ):
-        raise ValueError('Either 2 or 3 components for the projection')
+    # accepts only 1-3 entries for the projection
+    if len(args.project) < 1 and len(args.project) > 3:
+        raise ValueError('Either 1, 2 or 3 components for the projection')
+    elif len(args.project) == 1 and args.normalization == 'selection':
+        print('\tWARNING: you selected 1 projection and \'selection\' normalization. This does not make sense. Normalization is changed to \'all\'')
+        logging.info('WARNING: normalization is changed to \'all\'')
+        args.normalization='all'
 
     # calculates contributions for bands and DOS projections
     el_orbs = []
     el_orbs_labels = []
-    for component in args.project:      # either 2 or 3 components, e.g. 'N.s.pz', 'N.s+O.s.pz', 'N+O.s', 'N+O', 'X', 'X.s', 'X.s+N.px.py.pz', ...
+
+    # read the projections
+    # 1-3 components, e.g. 'N.s.pz', 'N.s+O.s.pz', 'N+O.s', 'N+O', 'X', 'X.s', 'X.s+N.px.py.pz', ...
+    for component in args.project:
         element_components = component.split("+")   # split elements, e.g. 'N.s+O.s.pz' becomes ['N.s', 'O.s.pz']
-        color_component = []
-        label_text = []
-        for element_component in element_components:
+        color_component = []			# list of components for one color
+        label_text = []                 # more readable, user-friendly text for the legend
+        for element_component in element_components:  # e.g. for element in the list ['N.s', 'O.s.pz'] (example above)
             splits = element_component.split(".")   # e.g. 'N.s.pz' converted to ['N', 's', 'pz']
-            element = splits[0]                     # first element is the atom symbol
-            if len(splits) == 1:                    # if no orbital is specified (e.g. 'N'), then plot all orbitals (= 'all')
+            element = splits[0]                     # first element is the atom symbol, e.g. 'N'
+            if len(splits) == 1:                    # if splits has one element, then no orbitals are specified (e.g. 'N') => plot all orbitals (= 'all')
                 orbitals = 'all'
             else:
                 orbitals = splits[1:]               # e.g. ['s', 'pz'] 
-            color_component.append([element,orbitals])
+            color_component.append([element,orbitals])	
 
-            # write text for legend
             if element == 'X':                      # 'X' represents all atoms
-                if len(splits) == 1:
+                if len(splits) == 1:                # if input is only 'X'
                     label_text.append('s+p_x+p_y+p_z')      # this makes no sense to choose, it's the projection of all atoms and orbitals, but who am I to judge
                 else:
-                    label_text.append("+".join(orbitals).replace('p','p_'))   # e.g. 'X.s.pz' becomes 's+p_z'
+                    label_text.append("+".join(orbitals).replace('p','p_'))   # more readable, e.g. 'X.s.pz' becomes 's+p_z'
             else:
-                if len(splits) == 1:                        # all orbitals, only the element: 'N'
-                    label_text.append(element)
+                if len(splits) == 1:                        # all orbitals, only the element: 'N'; or the index: '2'
+                    if element.isnumeric() is True:
+                        label_text.append(atom_labels[int(element)-1]+element)
+                    else:
+                        label_text.append(element)
                 else:
-                    label_text.append(f"{element}({','.join(orbitals).replace('p','p_')})")   # e.g. 'O.s.pz' becomes 'O(s+p_z)'
+                    if element.isnumeric() is True:
+                        label_text.append(f"{atom_labels[int(element)-1]+element}({','.join(orbitals).replace('p','p_')})")
+                    else:
+                        label_text.append(f"{element}({','.join(orbitals).replace('p','p_')})")   # e.g. 'O.s.pz' becomes 'O(s+p_z)'
         el_orbs.append(color_component)
         el_orbs_labels.append("+".join(label_text))         # e.g. 'O.s.pz+H.s' becomes 'O(s+p_z)+H(s)'
 
@@ -145,6 +160,27 @@ def CalculateProjections():
     print('\tProjections:')
     for color_idx, color_contrib in enumerate(el_orbs_labels):
         print(f'\t    - {color_values[color_idx]}:\t{color_contrib}')
+
+    print(f'\tNormalization mode is: \'{args.normalization}\'')
+
+    logging.info(f'Calculating contributions for orbitals with angular momentum up to l = {args.max_l}. Ignoring the rest if l < 3')
+    logging.info(f'Normalization mode is {args.normalization}:')
+    if args.normalization == 'selection':
+        logging.info(f'\tselected contributions sum to 1. Other contributions (if any) will not be visible in the plot!')
+    else:
+        logging.info(f'\tselected contributions are normalized with respect to all contributions.')
+
+
+    logging.info('Contribution table ([red,green,blue] format)')
+
+    if len(el_orbs_labels) == 1:
+        logging.info(f'Color is: red = {el_orbs_labels[0]}')
+    elif len(el_orbs_labels) == 2:
+        logging.info(f'Color is: red = {el_orbs_labels[0]}, green = {el_orbs_labels[1]}')
+    elif len(el_orbs_labels) == 3:
+        logging.info(f'Color is: red = {el_orbs_labels[0]}, green = {el_orbs_labels[1]}, blue = {el_orbs_labels[2]}')
+
+    logging.info(f'band' + '\t\t\t\t' + '\t\t\t\t\t'.join(labels))
 
     # as in VASP
     orbital_values = { 's': 0,
@@ -160,21 +196,20 @@ def CalculateProjections():
     # contributions to the DOS per each color: contrib_dos[color][energy]
     contrib_dos = np.zeros((len(el_orbs), len(dosrun.pdos[0][Orbital.s][Spin.up])))
 
-    logging.info('Contribution table ([red, green, blue] format)')
-    logging.info(f'Colors are: red = {el_orbs_labels[0]}, green = {el_orbs_labels[1]}, blue = {el_orbs_labels[2]}')
-    logging.info(f'band' + '\t\t\t' + '\t\t\t\t\t'.join(labels))
 
     # obtain contributions
     # sum over all bands
     for b in range(bands.nb_bands):
         # sum over all k-points
         for k in range(len(bands.kpoints)):
-            for color_idx, color_contrib in enumerate(el_orbs): # color_idx: up to either 2 or 3. color_contrib: list of [elements, orbitals] for each color
+            for color_idx, color_contrib in enumerate(el_orbs): # color_idx: 1-3. color_contrib: list of [elements, orbitals] for each color
                 for element_contrib in color_contrib:
                     element = element_contrib[0]        # e.g. 'X', 'N'
                     orbitals = element_contrib[1]       # e.g. 'all', 's', ['s', 'pz']
                     if element == 'X':                  # if all atoms, get all indexes
                         element_indexes = range(len(atom_labels))
+                    elif element.isnumeric() is True:
+                        element_indexes = [int(element)-1]
                     else:                               # else, get the indexes with label = atom symbol (e.g. 'C')
                         element_indexes = [i for i, x in enumerate(atom_labels) if x == element]
 
@@ -229,7 +264,8 @@ def CalculateProjections():
     # plot DOS
     ax2.plot(contrib_dos[0],dosrun.tdos.energies - dosrun.efermi, \
             c=(1.0,0.0,0.0), label = f'${el_orbs_labels[0]}$', linewidth = 1)
-    ax2.plot(contrib_dos[1],dosrun.tdos.energies - dosrun.efermi, \
+    if len(el_orbs) >= 2:
+        ax2.plot(contrib_dos[1],dosrun.tdos.energies - dosrun.efermi, \
             c=(0.0,1.0,0.0), label = f'${el_orbs_labels[1]}$', linewidth = 1)
     if len(el_orbs) == 3:
         ax2.plot(contrib_dos[2],dosrun.tdos.energies - dosrun.efermi, \
