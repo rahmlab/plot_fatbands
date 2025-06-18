@@ -21,11 +21,11 @@ class SaneFormatter(argparse.RawTextHelpFormatter,
 
 parser = argparse.ArgumentParser(prog='plot_fatbands.py',description=("Plot projected band structure (fatbands) from a VASP calculation.\n" +
 									'Author: Marco Cappelletti. Heavily inspired by Kevin Waters (kwaters4.github.io) and sumo-bandplot.\n' +
-                                    'By default is assumes that:\n'  +
-									'\tthe current directory contains KPOINTS, vasprun.xml from the band calculations\n' +
-                                    '\tthe directory ../dos contains vasprun.xml from the dos calculation\n' +
+                                    'By default it assumes that:\n'  +
+									'\tthe current directory contains KPOINTS and vasprun.xml from the band structure calculation\n' +
+                                    '\tthe directory ../dos contains vasprun.xml from the DOS calculation\n' +
                                     '\tthe parent directory (../) contains the POSCAR file\n' +
-                                    '\tthe parent parent directory (../../) contains the POTCAR file\n')
+                                    '\tthe grandparent directory (../../) contains the POTCAR file\n')
 									,formatter_class=SaneFormatter)
 parser.add_argument('-B','--vasprun-file-bands', type=str, help='Path of the vasprun.xml file of the band calculation', default='vasprun.xml')
 parser.add_argument('-K','--KPOINTS-file', type=str, help='Path of the KPOINTS file with the band path', default='KPOINTS')
@@ -34,11 +34,15 @@ parser.add_argument('-O','--PROCAR-file', type=str, help='Path of the PROCAR fil
 parser.add_argument('-P','--POTCAR-file', type=str, help='Path of the POTCAR file', default='../../POTCAR')
 parser.add_argument('-D','--vasprun-file-dos', type=str, help='Path of the vasprun.xml file of the dos calculation', default='../dos/vasprun.xml')
 parser.add_argument('-p','--project', help='Band projection to rgb. Either 2 (red and green) or 3 arguments (red, green, blue). Nomenclature:\n'
-													'\t- E: all orbitals of element E (H, C, N, O, ...)\n'
-                                                    '\t- E.o: o-orbital of element E (s, px, py, pz, dxy, ...)\n'
-                                                    '\t- E.s.pz: s+pz orbitals of element E\n'
-                                                    '\t- X.s: s orbitals of all elements\n'
-                                                    '\t- O.s.pz+N.pz: sum of O(s,pz) and N(pz)\n', nargs='+', default=['X.px', 'X.py', 'X.s.pz'])
+													'\t- E: all orbitals of element with symbol E (H, C, N, O, ...)\n'
+                                                    '\t- E.o: o-orbital of element with symbol E (s, px, py, pz, dxy, ...)\n'
+                                                    '\t- E.s.pz: s+pz orbitals of element with symbol E\n'
+                                                    '\t- X.s: s orbitals of all elements (literal X)\n'
+                                                    '\t- O.s.pz+N.pz: sum of O(s,pz) and N(pz)\n'
+                                                    'Example:\n'
+                                                    '\t-p N O.s.pz+H.s C+X.pz =>'
+                                                    ' red: N(all orb.), green: O(s+pz)+H(s), blue: C(all orb.)+(all atoms pz)\n'
+                                                    , nargs='+', default=['X.px', 'X.py', 'X.s.pz'])
 parser.add_argument('-n','--normalization', type=str, help=f'Normalization of the projection.\n'
 													'\t-\'all\': with respect to all contributions.\n'
 													'\t-\'selection\': with respect to selection only\n', choices=['all','selection'], default='selection')
@@ -60,8 +64,9 @@ parser.add_argument('--format', type=str, help='Output file format', choices=['p
 parser.add_argument('--redo','--readlog',  help='Rerun the last command, if plot_fatbands.log file is present. This overrides every other argument!', action='store_true')
 
 args = parser.parse_args()
+redo = args.redo
 
-if args.redo is True:
+if redo is True:
     if os.path.isfile('plot_fatbands.log') is False:
         raise ValueError('I cannot rerun: plot_fatbands.log does not exist')
 
@@ -78,7 +83,7 @@ logging.basicConfig(
     format="%(message)s",
 )
 
-if args.redo is True:
+if redo is True:
     logging.info(argstr)
 else:
     logging.info(" ".join(sys.argv[:]))
@@ -139,7 +144,7 @@ def CalculateProjections():
     color_values = { 0: 'red', 1: 'green', 2: 'blue' }
     print('\tProjections:')
     for color_idx, color_contrib in enumerate(el_orbs_labels):
-        print(f'\t\t{color_values[color_idx]}: {color_contrib}')
+        print(f'\t    - {color_values[color_idx]}:\t{color_contrib}')
 
     # as in VASP
     orbital_values = { 's': 0,
@@ -246,6 +251,8 @@ def CalculateProjections():
 if __name__ == "__main__":
     print('--- plot_fatbands.py --------------------------------------')
     print(f'\tPlotting fatbands into {args.output_file}.{args.format}')
+    if redo is True:
+        print(f'\tRedoing previous run: {argstr}',end='')
     print(f'\tAdditional data is printed into plot_fatbands.log')
 
     # Load Structure
@@ -310,17 +317,21 @@ if __name__ == "__main__":
             for b in range(bands.nb_bands):
                 emin = min(emin, min(bands.bands[spin][b]))
                 emax = max(emax, max(bands.bands[spin][b]))
+        emin = emin - bands.efermi
+        emax = emax - bands.efermi
     elif emin is None:
         emin=100
         for spin in bands.bands.keys():
             for b in range(bands.nb_bands):
                 emin = min(emin, min(bands.bands[spin][b]))
+        emin = emin - bands.efermi
     elif emax is None:
         emax=-100
         for spin in bands.bands.keys():
             for b in range(bands.nb_bands):
                 emax = max(emax, max(bands.bands[spin][b]))
-    
+        emax = emax - bands.efermi
+
     # set y-axis limit
     ax1.set_ylim(emin, emax)
     ax2.set_ylim(emin, emax)
@@ -358,12 +369,12 @@ if __name__ == "__main__":
 
     if no_proj is False:
         CalculateProjections()
-	DOSlabel = 'total'
+        DOSlabel='total'
     else:
         print('\tNo projection requested. Plotting normal bands.')
         for b in range(bands.nb_bands): 
             ax1.plot(KPOINTS,[e - bands.efermi for e in bands.bands[Spin.up][b]], lw=args.plw, color='k')
-        DOSlabel = None
+        DOSlabel=None
 
     ax2.fill_betweenx(dosrun.tdos.energies - dosrun.efermi,
         0,dosrun.tdos.densities[Spin.up],
@@ -391,6 +402,7 @@ if __name__ == "__main__":
     # Plotting 
     # -----------------
     plt.savefig(f"{args.output_file}.{args.format}", format=args.format, bbox_inches='tight')
+
 
     print('\tFile saved.')
     print('-----------------------------------------------------------')
