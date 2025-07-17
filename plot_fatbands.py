@@ -46,9 +46,13 @@ parser.add_argument('-p','--project', help='Band projection to rgb. Either 2 (re
                                                     '\t-p 1+2+3 4.px.py.pz+5 H.s  =>'
                                                     ' red: 1(all orb.)+2(all orb.)+3(all orb.), green: 4(px+py+pz)+5+(px), blue: H(s)\n'
                                                     , nargs='+', default=['X.px', 'X.py', 'X.s.pz'])
+parser.add_argument('-t','--projection-type', type=str, help=f'Type of projection.\n'
+                                                    '\t-\'blend\': plot colored circles based on the (r,g,b) projection.\n'
+                                                    '\t-\'stacked\': plot stacked red, green, and blue circles, with size depending on projection.\n', 
+                                                    choices=['blend','stacked'], default='stacked')
 parser.add_argument('-n','--normalization', type=str, help=f'Normalization of the projection.\n'
 													'\t-\'all\': with respect to all contributions.\n'
-													'\t-\'selection\': with respect to selection only\n', choices=['all','selection'], default='selection')
+													'\t-\'selection\': with respect to selection only.\n', choices=['all','selection'], default='selection')
 parser.add_argument('-l','--max-l',type=int,default=1,choices=[1,2,3],help='Maximum value of l (angular momemtum) for the projection. Increases computational costs, so increase it only if necessary.')
 parser.add_argument('-N','--no-projection',help='Do not perform any projection',action='store_true')
 parser.add_argument('-m','--emin', type=float, help='Minimum of energy in the plot. If none, it chooses the lower limit', default=None)
@@ -57,7 +61,10 @@ parser.add_argument('-s','--scale', type=float, help='DOS scale factor', default
 parser.add_argument('-H','--height', type=float, help='Height of the plot in inches', default=3.5)
 parser.add_argument('-W','--width', type=float, help='Width of the plot in inches', default=3.3)
 parser.add_argument('-r','--ratio', type=float, help='Bandplot - dosplot width ratio', default=3.0)
-parser.add_argument('--plw','--plot-lw', type=float, help='Linewidth of bands and total DOS', default=2.0)
+parser.add_argument('--blw','--band-lw', type=float, help='Linewidth of bands, when projection is off.', default=2.0)
+parser.add_argument('--bs','--band-size', type=float, help='Circle size of bands, when projection is on.', default=6.0)
+parser.add_argument('--ba','--band-alpha', type=float, help='alpha value (transparency) of bands', default=0.9)
+parser.add_argument('--dlw','--dos-lw', type=float, help='Linewidth of DOS', default=1.0)
 parser.add_argument('--vlw','--lines-lw', type=float, help='Linewidth of vertical lines. Set it to 0 to remove them', default=1.0)
 parser.add_argument('--flw','--Fermi-lw', type=float, help='Linewidth of Fermi level. Set it to 0 to remove it', default=1.0)
 parser.add_argument('--glw','--grid-lw', type=float, help='Linewidth of grid. Set it to 0 to remove them', default=1.0)
@@ -96,22 +103,25 @@ no_proj=args.no_projection
 
 
 
-# plot colored line. Function written by Kevin Waters
-def rgbline(ax, KPOINTS, e, red, green, blue, alpha=1.):
-    #creation of segments based on
-    #http://nbviewer.ipython.org/urls/raw.github.com/dpsanders/matplotlib-examples/master/colorline.ipynb
-    pts = np.array([KPOINTS, e]).T.reshape(-1, 1, 2)
-    seg = np.concatenate([pts[:-1], pts[1:]], axis=1)
-    nseg = len(KPOINTS) -1
-    a = np.ones(nseg, np.float64)*alpha
-    lc = LineCollection(seg, colors=list(zip(red,green,blue,a)), linewidth = args.plw)
-    ax.add_collection(lc)
+def rgbcircles(ax, KPOINTS, e, red, green, blue, alpha):
+
+    if args.projection_type == 'blend':
+        ax.scatter(KPOINTS,e,s=args.bs,color=list(zip(red,green,blue)),alpha=alpha)
+
+    else:
+        #ax.scatter(KPOINTS,e,s=0.5,color='k')
+        sizes=np.array(list(zip(red,green,blue)),dtype=float)
+        ax.scatter(KPOINTS,e,s=args.bs*(sizes[:,0]+sizes[:,1]+sizes[:,2]),color=(0,0,1),edgecolor='none',alpha=alpha)
+        ax.scatter(KPOINTS,e,s=args.bs*(sizes[:,0]+sizes[:,1]),color=(0,1,0),edgecolor='none',alpha=alpha)
+        ax.scatter(KPOINTS,e,s=args.bs*sizes[:,0],color=(1,0,0),edgecolor='none',alpha=alpha)
 
 
-def CalculateProjections():
+
+
+def CalculateProjectionsAndPlot():
     # accepts only 1-3 entries for the projection
     if len(args.project) < 1 and len(args.project) > 3:
-        raise ValueError('Either 1, 2 or 3 components for the projection')
+        raise ValueError('Only 1, 2 or 3 components allowed for the projection')
     elif len(args.project) == 1 and args.normalization == 'selection':
         print('\tWARNING: you selected 1 projection and \'selection\' normalization. This does not make sense. Normalization is changed to \'all\'')
         logging.info('WARNING: normalization is changed to \'all\'')
@@ -162,23 +172,24 @@ def CalculateProjections():
         print(f'\t    - {color_values[color_idx]}:\t{color_contrib}')
 
     print(f'\tNormalization mode is: \'{args.normalization}\'')
+    print(f'\tProjection type is: \'{args.projection_type}\'')
+
 
     logging.info(f'Calculating contributions for orbitals with angular momentum up to l = {args.max_l}. Ignoring the rest if l < 3')
-    logging.info(f'Normalization mode is {args.normalization}:')
     if args.normalization == 'selection':
-        logging.info(f'\tselected contributions sum to 1. Other contributions (if any) will not be visible in the plot!')
+        logging.info(f'Normalization mode is {args.normalization}: selected contributions sum to 1. Other contributions (if any) will not be visible in the plot!')
     else:
-        logging.info(f'\tselected contributions are normalized with respect to all contributions.')
+        logging.info(f'Normalization mode is {args.normalization}: selected contributions are normalized with respect to all contributions.')
 
 
-    logging.info('Contribution table ([red,green,blue] format)')
+    logging.info(f'\nContribution table (only plotted bands) ([red,green,blue] format)')
 
     if len(el_orbs_labels) == 1:
-        logging.info(f'Color is: red = {el_orbs_labels[0]}')
+        logging.info(f'Color is red = {el_orbs_labels[0]}')
     elif len(el_orbs_labels) == 2:
-        logging.info(f'Color is: red = {el_orbs_labels[0]}, green = {el_orbs_labels[1]}')
+        logging.info(f'Colors are: red = {el_orbs_labels[0]}, green = {el_orbs_labels[1]}')
     elif len(el_orbs_labels) == 3:
-        logging.info(f'Color is: red = {el_orbs_labels[0]}, green = {el_orbs_labels[1]}, blue = {el_orbs_labels[2]}')
+        logging.info(f'Colors are: red = {el_orbs_labels[0]}, green = {el_orbs_labels[1]}, blue = {el_orbs_labels[2]}')
 
     logging.info(f'band' + '\t\t\t\t' + '\t\t\t\t\t'.join(labels))
 
@@ -199,7 +210,7 @@ def CalculateProjections():
 
     # obtain contributions
     # sum over all bands
-    for b in range(bands.nb_bands):
+    for b in range(min_band_to_plot,max_band_to_plot+1):
         # sum over all k-points
         for k in range(len(bands.kpoints)):
             for color_idx, color_contrib in enumerate(el_orbs): # color_idx: 1-3. color_contrib: list of [elements, orbitals] for each color
@@ -221,7 +232,7 @@ def CalculateProjections():
                     for i in element_indexes:
                         for j in orbital_indexes:
                             contrib_bands[b,k,color_idx] += data[Spin.up][k][b][i][j]**2
-                            if k == 0 and b == 0:
+                            if k == 0 and b == min_band_to_plot:	# needs to be done just once 
                                 contrib_dos[color_idx] += np.array(dosrun.pdos[i][Orbital(j)][Spin.up])
 
             # normalization
@@ -253,20 +264,20 @@ def CalculateProjections():
 
 
     # plot bands using rgb mapping
-    for b in range(bands.nb_bands):
-        rgbline(ax1,
+    for b in range(min_band_to_plot,max_band_to_plot+1):
+        rgbcircles(ax1,
                 KPOINTS,
                 [e - bands.efermi for e in bands.bands[Spin.up][b]],
                 contrib_bands[b,:,0],
                 contrib_bands[b,:,1],
-                contrib_bands[b,:,2])   #this is np.zeros if only two colors are defined
+                contrib_bands[b,:,2], args.ba)   #this is np.zeros if only two colors are defined
 
     # plot DOS
     ax2.plot(contrib_dos[0],dosrun.tdos.energies - dosrun.efermi, \
-            c=(1.0,0.0,0.0), label = f'${el_orbs_labels[0]}$', linewidth = 1)
+            c=(1.0,0.0,0.0), label = f'${el_orbs_labels[0]}$', linewidth = args.dlw)
     if len(el_orbs) >= 2:
         ax2.plot(contrib_dos[1],dosrun.tdos.energies - dosrun.efermi, \
-            c=(0.0,1.0,0.0), label = f'${el_orbs_labels[1]}$', linewidth = 1)
+            c=(0.0,1.0,0.0), label = f'${el_orbs_labels[1]}$', linewidth = args.dlw)
     if len(el_orbs) == 3:
         ax2.plot(contrib_dos[2],dosrun.tdos.energies - dosrun.efermi, \
             c=(0.0,0.0,1.0), label = f'${el_orbs_labels[2]}$', linewidth = 1)
@@ -347,8 +358,8 @@ if __name__ == "__main__":
 
     # if either is not defined, get the min and/or the max of energy from bands.bands.keys()
     if emin is None and emax is None:
-        emin=100
-        emax=-100
+        emin=1000
+        emax=-1000
         for spin in bands.bands.keys():
             for b in range(bands.nb_bands):
                 emin = min(emin, min(bands.bands[spin][b]))
@@ -356,13 +367,13 @@ if __name__ == "__main__":
         emin = emin - bands.efermi
         emax = emax - bands.efermi
     elif emin is None:
-        emin=100
+        emin=1000
         for spin in bands.bands.keys():
             for b in range(bands.nb_bands):
                 emin = min(emin, min(bands.bands[spin][b]))
         emin = emin - bands.efermi
     elif emax is None:
-        emax=-100
+        emax=-1000
         for spin in bands.bands.keys():
             for b in range(bands.nb_bands):
                 emax = max(emax, max(bands.bands[spin][b]))
@@ -372,6 +383,15 @@ if __name__ == "__main__":
     ax1.set_ylim(emin, emax)
     ax2.set_ylim(emin, emax)
 
+    # set first and last bands to plot, so that it calculates the projections only on those
+    min_band_to_plot = 1000
+    max_band_to_plot = -1
+
+    for spin in bands.bands.keys():
+        min_band_to_plot = min(min_band_to_plot, np.min(np.where(bands.bands[spin] >= emin + bands.efermi)[0]))
+        max_band_to_plot = max(max_band_to_plot, np.max(np.where(bands.bands[spin] <= emax + bands.efermi)[0]))
+
+    print(f'\tPlotting bands from {emin} to {emax} eV, band numbers from {min_band_to_plot+1} to {max_band_to_plot+1}')
 
     reciprocal = bands.lattice_rec.matrix/(2*math.pi)
 
@@ -404,12 +424,12 @@ if __name__ == "__main__":
 
 
     if no_proj is False:
-        CalculateProjections()
+        CalculateProjectionsAndPlot()
         DOSlabel='total'
     else:
         print('\tNo projection requested. Plotting normal bands.')
-        for b in range(bands.nb_bands): 
-            ax1.plot(KPOINTS,[e - bands.efermi for e in bands.bands[Spin.up][b]], lw=args.plw, color='k')
+        for b in range(min_band_to_plot,max_band_to_plot+1): 
+            ax1.plot(KPOINTS,[e - bands.efermi for e in bands.bands[Spin.up][b]], lw=args.blw, color='k')
         DOSlabel=None
 
     ax2.fill_betweenx(dosrun.tdos.energies - dosrun.efermi,
@@ -419,7 +439,7 @@ if __name__ == "__main__":
     ax2.plot(dosrun.tdos.densities[Spin.up],
         dosrun.tdos.energies - dosrun.efermi,
         color = (0.6, 0.6, 0.6),
-        label = DOSlabel, lw=args.plw)
+        label = DOSlabel, lw=args.dlw)
 
     if no_proj is False:
         ax2.legend(fancybox=False, shadow=False, prop={'size': args.font_size-1},labelspacing=0.15,borderpad=0.20,handlelength=1.2,framealpha=0.6)
@@ -437,7 +457,7 @@ if __name__ == "__main__":
 
     # Plotting 
     # -----------------
-    plt.savefig(f"{args.output_file}.{args.format}", format=args.format, bbox_inches='tight')
+    plt.savefig(f"{args.output_file}.{args.format}", format=args.format, bbox_inches='tight', dpi=400)
 
 
     print('\tFile saved.')
