@@ -54,7 +54,9 @@ parser.add_argument('--split', help='Split projections in different plots.', act
 parser.add_argument('-n','--normalization', type=str, help=f'Normalization of the projection.\n'
 													'\t- all: with respect to all contributions.\n'
 													'\t- selection: with respect to selection only.\n', choices=['all','selection'], default='selection')
-parser.add_argument('-l','--max-l',type=int,default=1,choices=[1,2,3],help='Maximum value of l (angular momemtum) for the projection. Increases computational costs, so increase it only if necessary.')
+parser.add_argument('-l','--max-l',type=int,default=1,choices=[1,2,3],
+                                help='Maximum value of l (angular momemtum) for the projection.\
+                                      Increases computational costs, so increase it only if necessary.')
 parser.add_argument('-N','--no-projection',help='Do not perform any projection',action='store_true')
 parser.add_argument('-m','--emin', type=float, help='Minimum of energy in the plot. If none, it chooses the lower limit', default=None)
 parser.add_argument('-M','--emax', type=float, help='Maximum of energy in the plot. If none, it chooses the upper limit', default=None)
@@ -62,14 +64,20 @@ parser.add_argument('-s','--scale', type=float, help='DOS scale factor', default
 parser.add_argument('-H','--height', type=float, help='Height of the plot in inches', default=3.5)
 parser.add_argument('-W','--width', type=float, help='Width of the plot in inches', default=3.3)
 parser.add_argument('-r','--ratio', type=float, help='Bandplot - dosplot width ratio', default=3.0)
-parser.add_argument('--blw','--band-lw', type=float, help='Linewidth of bands, when projection is off.', default=2.0)
-parser.add_argument('--bs','--band-size', type=float, help='Circle size of bands, when projection is on.', default=6.0)
-parser.add_argument('--ba','--band-alpha', type=float, help='alpha value (transparency) of bands', default=0.9)
+parser.add_argument('--blw','--band-lw', type=float, help='Linewidth of non-projected bands', default=2.0)
+parser.add_argument('--bs','--band-size', type=float, help='Circle size of bands, when projection is on.', default=8.0)
+parser.add_argument('--ba','--band-alpha', type=float, help='alpha value (transparency) of bands', default=1.0)
 parser.add_argument('--dlw','--dos-lw', type=float, help='Linewidth of DOS', default=1.0)
 parser.add_argument('--vlw','--lines-lw', type=float, help='Linewidth of vertical lines. Set it to 0 to remove them', default=1.0)
 parser.add_argument('--flw','--Fermi-lw', type=float, help='Linewidth of Fermi level. Set it to 0 to remove it', default=1.0)
 parser.add_argument('--glw','--grid-lw', type=float, help='Linewidth of grid. Set it to 0 to remove them', default=1.0)
 parser.add_argument('-f','--font-size', type=float, help='Fontsize', default=7)
+parser.add_argument('--c-mode','--color-mode', type=str,  
+                                 help='Color mode for blended fatbands. rbg (additive) = red, green, blue; cmy (substractive) = cyan, magenta, yellow.',
+                                 choices=['rgb','cmy'], default='rgb')
+parser.add_argument('--cmap','--colormap', type=str, 
+                                 help='Color scheme for stacked fatbands.', 
+                                 choices=['rgb','dark','light','accent','plt'], default='rgb')
 parser.add_argument('-o','--output-file', type=str, help='Path and name of the output file, excluding the format', default='fatbands')
 parser.add_argument('--format', type=str, help='Output file format', choices=['pdf','png'], default='pdf')
 parser.add_argument('--redo','--readlog',  help='Rerun the last command, if plot_fatbands.log file is present. This overrides every other argument!', action='store_true')
@@ -99,35 +107,69 @@ if redo is True:
 else:
     logging.info(" ".join(sys.argv[:]))
 
-scale=args.scale
-no_proj=args.no_projection
+scale = args.scale
+no_proj = args.no_projection
+N_proj = len(args.project)
+
+
+match args.cmap:
+    case 'rgb':
+         colors = plt.cm.Set1.colors
+    case 'dark':
+         colors = plt.cm.Dark2.colors
+    case 'light':
+         colors = plt.cm.Set2.colors
+    case 'accent':
+         colors = plt.cm.Accent.colors
+    case 'plt':
+         colors = plt.cm.tab10.colors
+
+if args.projection_type == 'blend':
+    rgb = np.array([[1,0,0], [0,1,0], [0,0,1]])
+    if args.color_scheme == 'cmy':
+        rgb = 1 - rgb
+
 
 
 
 def CheckInput():
     # accepts only 1-3 entries for the projection
-    if len(args.project) < 1 and len(args.project) > 3:
-        raise ValueError('Only 1, 2 or 3 components allowed for the projection')
-    elif len(args.project) == 1 and args.normalization == 'selection':
+    if N_proj < 1 or N_proj > 3:
+        if args.split is False:
+            raise ValueError('Only 1, 2 or 3 components allowed for the non-split projection')
+        elif N_proj < 2 or N_proj > 5:
+            raise ValueError('2-5 components allowed for the split projection')
+    elif N_proj == 1 and args.normalization == 'selection':
         print('\tWARNING: you selected 1 projection and \'selection\' normalization. This does not make sense. Normalization is changed to \'all\'')
         logging.info('WARNING: normalization is changed to \'all\'')
         args.normalization='all'
-
+    
+    if args.split is True and args.projection_type == 'blend':
+        raise ValueError('Only stacked projection allowed for split')
 
     if args.split is True and no_proj is True:
         raise ValueError('Cannot split non-projected bands!')
 
-def rgbcircles(ax, KPOINTS, energies, rgb):
 
-    if args.projection_type == 'blend':
-        ax.scatter(KPOINTS,energies,s=args.bs,color=list(zip(rgb[0],rgb[1],rgb[2])),alpha=args.ba)
 
-    elif args.projection_type == 'stack':
-        ax.plot(KPOINTS,energies,lw=1.0,color='k',alpha=0.5)
-        sizes=np.array(list(zip(rgb[0],rgb[1],rgb[2])),dtype=float)
-        ax.scatter(KPOINTS,energies,s=args.bs*(sizes[:,0]+sizes[:,1]+sizes[:,2]),color=(0,0,1),edgecolor='none',alpha=args.ba)
-        ax.scatter(KPOINTS,energies,s=args.bs*(sizes[:,0]+sizes[:,1]),color=(0,1,0),edgecolor='none',alpha=args.ba)
-        ax.scatter(KPOINTS,energies,s=args.bs*sizes[:,0],color=(1,0,0),edgecolor='none',alpha=args.ba)
+
+
+def plotcircles(ax, KPOINTS, band_energies, contrib, index):
+
+    if args.split is False and args.projection_type == 'stack':
+        sizes = args.bs * contrib[:,:,index:3].sum(axis=2)**2
+    elif args.split is True:
+        sizes = args.bs * contrib
+        for be in band_energies:
+            ax.plot(KPOINTS,be,lw=0.5,color='k')
+
+    for bidx,be in enumerate(band_energies):
+        if args.projection_type == 'blend':
+            ax.scatter(KPOINTS,be,s=args.bs,color=rgb[index],alpha=contrib[bidx,:,index]**2,edgecolor='none')
+        elif  args.projection_type == 'stack':
+            ax.scatter(KPOINTS,be,s=sizes[bidx],color=colors[index],alpha=args.ba,edgecolor='none')
+
+    
 
 
 
@@ -138,7 +180,7 @@ def CalculateProjectionsAndPlot():
     el_orbs_labels = []
 
     # read the projections
-    # 1-3 components, e.g. 'N.s.pz', 'N.s+O.s.pz', 'N+O.s', 'N+O', 'X', 'X.s', 'X.s+N.px.py.pz', ...
+    # 1-5 components, e.g. 'N.s.pz', 'N.s+O.s.pz', 'N+O.s', 'N+O', 'X', 'X.s', 'X.s+N.px.py.pz', ...
     for component in args.project:
         element_components = component.split("+")   # split elements, e.g. 'N.s+O.s.pz' becomes ['N.s', 'O.s.pz']
         color_component = []			# list of components for one color
@@ -172,32 +214,29 @@ def CalculateProjectionsAndPlot():
         el_orbs_labels.append("+".join(label_text))         # e.g. 'O.s.pz+H.s' becomes 'O(s+p_z)+H(s)'
 
     
-    color_values = { 0: 'red', 1: 'green', 2: 'blue' }
-    print('\tProjections:')
-    for color_idx, color_contrib in enumerate(el_orbs_labels):
-        print(f'\t    - {color_values[color_idx]}:\t{color_contrib}')
-
-    print(f'\tNormalization mode is: \'{args.normalization}\'')
-    print(f'\tProjection type is: \'{args.projection_type}\'')
-
 
     logging.info(f'Calculating contributions for orbitals with angular momentum up to l = {args.max_l}. Ignoring the rest if l < 3')
     if args.normalization == 'selection':
         logging.info(f'Normalization mode is {args.normalization}: selected contributions sum to 1. Other contributions (if any) will not be visible in the plot!')
     else:
         logging.info(f'Normalization mode is {args.normalization}: selected contributions are normalized with respect to all contributions.')
+            
+                
+    print(f'\tBands are projected into {N_proj} contributions:')
+    logging.info(f'Bands are projected into {N_proj} contributions:')
+    for color_idx, color_contrib in enumerate(el_orbs_labels):
+        print(f'\t    - color {color_idx} (rgb={np.around(colors[color_idx],1)}):\t{color_contrib}')
+        logging.info(f'\t-color {color_idx} (rgb={np.around(colors[color_idx],2)}):\t{color_contrib}')
+
+    print(f'\tNormalization mode is: \'{args.normalization}\'')
+    print(f'\tProjection type is: \'{args.projection_type}\'')
 
 
-    logging.info(f'\nContribution table (only plotted bands) ([red,green,blue] format)')
+    logging.info('\n------------------------------------------------------------------------')
+    logging.info('Contribution table for high-symmetry points (only for plotted bands)')
 
-    if len(el_orbs_labels) == 1:
-        logging.info(f'Color is red = {el_orbs_labels[0]}')
-    elif len(el_orbs_labels) == 2:
-        logging.info(f'Colors are: red = {el_orbs_labels[0]}, green = {el_orbs_labels[1]}')
-    elif len(el_orbs_labels) == 3:
-        logging.info(f'Colors are: red = {el_orbs_labels[0]}, green = {el_orbs_labels[1]}, blue = {el_orbs_labels[2]}')
+    logging.info(f'\nband n' + '\t' + '\t'.join(labels))
 
-    logging.info(f'band' + '\t\t\t\t' + '\t\t\t\t\t'.join(labels))
 
 
     # as in VASP
@@ -209,18 +248,18 @@ def CalculateProjectionsAndPlot():
     max_l_index = (args.max_l + 1)**2   # 1 -> 4, 2 -> 9, 3 -> 16. So to have range(0,max_l_index) = [0,1,...,max_l_index-1]
 
     # contributions to the band per each band, k-point, and color: contrib_bands[band][k-point][color]
-    contrib_bands = np.zeros((bands.nb_bands, len(bands.kpoints), 3))
+    contrib_bands = np.zeros((max_band_to_plot-min_band_to_plot+1, len(bands.kpoints), N_proj))
 
     # contributions to the DOS per each color: contrib_dos[color][energy]
-    contrib_dos = np.zeros((len(el_orbs), len(dosrun.pdos[0][Orbital.s][Spin.up])))
+    contrib_dos = np.zeros((N_proj, len(dosrun.pdos[0][Orbital.s][Spin.up])))
 
 
     # obtain contributions
-    # sum over all bands
-    for b in range(min_band_to_plot,max_band_to_plot+1):
+    # sum over all bands to plot
+    for b in range(max_band_to_plot-min_band_to_plot+1):
         # sum over all k-points
         for k in range(len(bands.kpoints)):
-            for color_idx, color_contrib in enumerate(el_orbs): # color_idx: 1-3. color_contrib: list of [elements, orbitals] for each color
+            for color_idx, color_contrib in enumerate(el_orbs): # color_idx: 1-5. color_contrib: list of [elements, orbitals] for each color
                 for element_contrib in color_contrib:
                     element = element_contrib[0]        # e.g. 'X', 'N'
                     orbitals = element_contrib[1]       # e.g. 'all', 's', ['s', 'pz']
@@ -238,7 +277,7 @@ def CalculateProjectionsAndPlot():
 
                     for i in element_indexes:
                         for j in orbital_indexes:
-                            contrib_bands[b,k,color_idx] += data[Spin.up][k][b][i][j]**2
+                            contrib_bands[b,k,color_idx] += data[Spin.up][k][b+min_band_to_plot][i][j]**2
                             if k == 0 and b == min_band_to_plot:	# needs to be done just once 
                                 contrib_dos[color_idx] += np.array(dosrun.pdos[i][Orbital(j)][Spin.up])
 
@@ -254,56 +293,66 @@ def CalculateProjectionsAndPlot():
                 tot = 0.0
                 for i in range(len(atom_labels)):
                     for j in range(0,max_l_index):
-                        tot += data[Spin.up][k][b][i][j]**2
+                        tot += data[Spin.up][k][b+min_band_to_plot][i][j]**2
                 if tot != 0:
                     contrib_bands[b,k,:] = contrib_bands[b,k,:]/tot
                 #else:
                     #contrib_bands[b,k,:] = contrib_bands[b,k-1,:]
-        if b < 9:
-            b_str = '  ' + str(b+1)
-        elif b < 99:
-            b_str = ' ' + str(b+1)
+        if b+min_band_to_plot < 9:
+            b_str = '  ' + str(b+min_band_to_plot+1)
+        elif b+min_band_to_plot < 99:
+            b_str = ' ' + str(b+min_band_to_plot+1)
         else:
-            b_str = str(b+1)
+            b_str = str(b+min_band_to_plot+1)
         logging.info(f'{b_str}: ' + '\t'
-                     + '\t'.join('[' + ', '.join(f'{x:.2f}' for x in contrib_bands[b, lkn, :])
+                     + '\t'.join('[' + ','.join(f'{x:.2f}' for x in contrib_bands[b, lkn, :])
                      + ']' for lkn in labels_kpt_num))
 
 
     # Plotting -----------------------------------------------------------------
 
+    bands_to_plot = bands.bands[Spin.up][min_band_to_plot:max_band_to_plot+1] - bands.efermi
+
     if args.split is False:
-        for b in range(min_band_to_plot,max_band_to_plot+1):
-            rgbcircles(ax_bands,
-                KPOINTS,
-                [e - bands.efermi for e in bands.bands[Spin.up][b]],
-                [contrib_bands[b,:,0], contrib_bands[b,:,1],contrib_bands[b,:,2]])  #third element is np.zeros if only two colors are defined
-    else:
-        zero_projections = np.zeros(len(bands.kpoints))
-        for proj_n in range(len(args.project)):
-            ax = ax_bands[proj_n]
-            for b in range(min_band_to_plot,max_band_to_plot+1):
-                if proj_n == 0:
-                    rgb = [ contrib_bands[b,:,0], zero_projections, zero_projections ]
-                elif proj_n == 1:
-                    rgb = [ zero_projections, contrib_bands[b,:,1], zero_projections ]
-                elif proj_n == 2:
-                    rgb = [ zero_projections, zero_projections, contrib_bands[b,:,2] ]
-
-                rgbcircles(ax,
+        if args.projection_type == 'stack':
+            for proj_n in range(N_proj):
+                plotcircles(ax_bands,
                     KPOINTS,
-                    [e - bands.efermi for e in bands.bands[Spin.up][b]],
-                    rgb)
+                    bands_to_plot,
+                    contrib_bands,
+                    proj_n)
+                
+                ax_DOS.plot(contrib_dos[proj_n],dosrun.tdos.energies - dosrun.efermi, \
+                    c=colors[proj_n], label = f'${el_orbs_labels[proj_n]}$', linewidth = args.dlw)
 
-    # plot DOS
-    ax_DOS.plot(contrib_dos[0],dosrun.tdos.energies - dosrun.efermi, \
-            c=(1.0,0.0,0.0), label = f'${el_orbs_labels[0]}$', linewidth = args.dlw)
-    if len(el_orbs) >= 2:
-        ax_DOS.plot(contrib_dos[1],dosrun.tdos.energies - dosrun.efermi, \
-            c=(0.0,1.0,0.0), label = f'${el_orbs_labels[1]}$', linewidth = args.dlw)
-    if len(el_orbs) == 3:
-        ax_DOS.plot(contrib_dos[2],dosrun.tdos.energies - dosrun.efermi, \
-            c=(0.0,0.0,1.0), label = f'${el_orbs_labels[2]}$', linewidth = 1)
+        elif args.projection_type == 'blend':
+            for proj_n in range(N_proj):
+                plotcircles(ax_bands,
+                    KPOINTS,
+                    bands_to_plot,
+                    contrib_bands,
+                    proj_n)
+
+            ax_DOS.plot(contrib_dos[0],dosrun.tdos.energies - dosrun.efermi, \
+                   c=rgb[0], label = f'${el_orbs_labels[0]}$', linewidth = args.dlw)
+            ax_DOS.plot(contrib_dos[1],dosrun.tdos.energies - dosrun.efermi, \
+                   c=rgb[1], label = f'${el_orbs_labels[1]}$', linewidth = args.dlw)
+            if len(el_orbs) == 3:
+               ax_DOS.plot(contrib_dos[2],dosrun.tdos.energies - dosrun.efermi, \
+                   c=rgb[2], label = f'${el_orbs_labels[2]}$', linewidth = args.dlw)
+
+    else:
+        for proj_n in range(N_proj):
+            ax = ax_bands[proj_n]
+            plotcircles(ax,
+                KPOINTS,
+                bands_to_plot,
+                contrib_bands[:,:,proj_n],
+                proj_n)
+
+            # plot DOS
+            ax_DOS.plot(contrib_dos[proj_n],dosrun.tdos.energies - dosrun.efermi, \
+                c=colors[proj_n], label = f'${el_orbs_labels[proj_n]}$', linewidth = args.dlw)
 
     # --------------------------------------------------------------------------
 
@@ -320,10 +369,11 @@ def CalculateProjectionsAndPlot():
 
 if __name__ == "__main__":
     print('--- plot_fatbands.py --------------------------------------')
-    print(f'\tPlotting fatbands into {args.output_file}.{args.format}')
+    print(f'\tPlotting fatbands into {args.output_file}.{args.format}. Size: {args.width} x {args.height} inches.')
     if redo is True:
         print(f'\tRedoing previous run: {argstr}',end='')
     print(f'\tAdditional data is printed into plot_fatbands.log')
+    logging.info(f'Plotting fatbands into {args.output_file}.{args.format}. Size: {args.width} x {args.height} inches.\n')
 
     CheckInput()
 
@@ -390,12 +440,12 @@ if __name__ == "__main__":
     # if split is requested: N band plots (N=number of projections, 1-3) and one DOS plot
     else:
         print('\tWARNING: split is requested, remember to change plot width!')
-        width_ratios = [ args.ratio/len(args.project) for proj_n in range(len(args.project)) ]
-        width_ratios.append(1)
-        gs = GridSpec(1, len(args.project)+1, width_ratios=width_ratios, wspace=0.1)
+        width_ratios = [ args.ratio/N_proj for proj_n in range(N_proj) ]
+        width_ratios.append(args.ratio/(2*N_proj))
+        gs = GridSpec(1, N_proj+1, width_ratios=width_ratios, wspace=0.1)
         fig = plt.figure(figsize=(args.width, args.height))
-        ax_bands = [ plt.subplot(gs[proj_n]) for proj_n in range(len(args.project)) ]
-        ax_DOS = plt.subplot(gs[len(args.project)]) #, sharey=ax1)
+        ax_bands = [ plt.subplot(gs[proj_n]) for proj_n in range(N_proj) ]
+        ax_DOS = plt.subplot(gs[N_proj]) 
         
     # --------------------------------------------------------------------------
 
@@ -489,6 +539,7 @@ if __name__ == "__main__":
     if no_proj is False:
         CalculateProjectionsAndPlot()
         DOSlabel='total'
+        ax_DOS.legend(fancybox=False, shadow=False, prop={'size': args.font_size-1},labelspacing=0.15,borderpad=0.20,handlelength=1.2,framealpha=0.6)
     else:
         print('\tNo projection requested. Plotting normal bands.')
         for b in range(min_band_to_plot,max_band_to_plot+1): 
@@ -504,8 +555,6 @@ if __name__ == "__main__":
         color = (0.6, 0.6, 0.6),
         label = DOSlabel, lw=args.dlw)
 
-    if no_proj is False:
-        ax_DOS.legend(fancybox=False, shadow=False, prop={'size': args.font_size-1},labelspacing=0.15,borderpad=0.20,handlelength=1.2,framealpha=0.6)
 
     # scaling factor for the x axis limit, if the peaks are too high
     maxdos = max(dosrun.tdos.densities[Spin.up])/scale
