@@ -12,8 +12,9 @@ from pymatgen.core import Structure
 from pymatgen.electronic_structure.core import Spin, Orbital
 
 import matplotlib.pyplot as plt
-from matplotlib.collections import LineCollection
+import matplotlib.colors as mcolors
 from matplotlib.gridspec import GridSpec
+
 
 class SaneFormatter(argparse.RawTextHelpFormatter, 
                     argparse.ArgumentDefaultsHelpFormatter):
@@ -33,7 +34,7 @@ parser.add_argument('-C','--POSCAR-file', type=str, help='Path of the POSCAR fil
 parser.add_argument('-O','--PROCAR-file', type=str, help='Path of the PROCAR file from the band calculation', default='PROCAR')
 parser.add_argument('-P','--POTCAR-file', type=str, help='Path of the POTCAR file', default='../../POTCAR')
 parser.add_argument('-D','--vasprun-file-dos', type=str, help='Path of the vasprun.xml file of the dos calculation', default='../dos/vasprun.xml')
-parser.add_argument('-p','--project', help='Band projection to rgb. Either 2 (red and green) or 3 arguments (red, green, blue). Nomenclature:\n'
+parser.add_argument('-p','--project', help='Band projections. Accepts 1-5 arguments. Nomenclature:\n'
 													'\t- E/n: all orbitals of element with symbol E (H, C, N, ...) or atom index n (1, 2, ...)\n'
                                                     '\t- E/n.o: o-orbital of element with symbol E or atom index n (s, px, py, pz, dxy, ...)\n'
                                                     '\t- E/n.s.pz: s+pz orbitals of element with symbol E or atom index n\n'
@@ -42,13 +43,13 @@ parser.add_argument('-p','--project', help='Band projection to rgb. Either 2 (re
                                                     'You are free to mix anything you want. There is no restriction.\n'
                                                     'Examples (a number represents an atom index, starting from 1, as in PROCAR):\n'
                                                     '\t-p N O.s.pz+H.s C+X.pz =>'
-                                                    ' red: N(all orb.), green: O(s+pz)+H(s), blue: C(all orb.)+(all atoms pz)\n'
+                                                    ' color 1: N(all orb.), color 2: O(s+pz)+H(s), color 2: C(all orb.)+(all atoms pz)\n'
                                                     '\t-p 1+2+3 4.px.py.pz+5 H.s  =>'
-                                                    ' red: 1(all orb.)+2(all orb.)+3(all orb.), green: 4(px+py+pz)+5+(px), blue: H(s)\n'
+                                                    ' color 1: 1(all orb.)+2(all orb.)+3(all orb.), color 2: 4(px+py+pz)+5+(px), color 3: H(s)\n'
                                                     , nargs='+', default=['X.px', 'X.py', 'X.s.pz'])
 parser.add_argument('-t','--projection-type', type=str, help=f'Type of projection.\n'
-                                                    '\t- blend: plot colored circles based on the (r,g,b) projection.\n'
-                                                    '\t- stack: plot stacked red, green, and blue circles, with size depending on projection.\n', 
+                                                    '\t- blend: plot projections into the additive (r,g,b) space, or into the substractive (c,m,y) space.\n'
+                                                    '\t- stack: plot stacked colored circles, with radius depending on contribution.\n', 
                                                     choices=['blend','stack'], default='stack')
 parser.add_argument('--split', help='Split projections in different plots.', action='store_true')
 parser.add_argument('-n','--normalization', type=str, help=f'Normalization of the projection.\n'
@@ -68,16 +69,25 @@ parser.add_argument('--blw','--band-lw', type=float, help='Linewidth of non-proj
 parser.add_argument('--bs','--band-size', type=float, help='Circle size of bands, when projection is on.', default=8.0)
 parser.add_argument('--ba','--band-alpha', type=float, help='alpha value (transparency) of bands', default=1.0)
 parser.add_argument('--dlw','--dos-lw', type=float, help='Linewidth of DOS', default=1.0)
-parser.add_argument('--vlw','--lines-lw', type=float, help='Linewidth of vertical lines. Set it to 0 to remove them', default=1.0)
 parser.add_argument('--flw','--Fermi-lw', type=float, help='Linewidth of Fermi level. Set it to 0 to remove it', default=1.0)
+parser.add_argument('--vlw','--vlines-lw', type=float, help='Linewidth of vertical lines. Set it to 0 to remove them', default=1.0)
+parser.add_argument('--vla','--vlines-alpha', type=float, help='alpha value (transparency) of vertical lines.', default=1.0)
 parser.add_argument('--glw','--grid-lw', type=float, help='Linewidth of grid. Set it to 0 to remove them', default=1.0)
+parser.add_argument('--gla','--grid-alpha', type=float, help='alpha value (transparency) of grid lines.', default=1.0)
 parser.add_argument('-f','--font-size', type=float, help='Fontsize', default=7)
 parser.add_argument('--c-mode','--color-mode', type=str,  
                                  help='Color mode for blended fatbands. rbg (additive) = red, green, blue; cmy (substractive) = cyan, magenta, yellow.',
                                  choices=['rgb','cmy'], default='rgb')
 parser.add_argument('--cmap','--colormap', type=str, 
-                                 help='Color scheme for stacked fatbands.', 
-                                 choices=['rgb','dark','light','accent','plt'], default='rgb')
+                                 help='Color scheme for stacked fatbands. \"rgbpo\" is red-green-blue-purple-orange;  \"tobpg\" is teal-orange-blue-pink-green.', 
+                                 choices=['rgbpo','palergbpo','darkrgbpo','pastelrgbpo','tobpg','darktobpg','pasteltobpg','accent','pastel','pltdefault'], default='darkrgbpo')
+parser.add_argument('--cord','--color-order', nargs='+', type=int, help='If you like to change the color order.\
+                                                                E.g. --cmap rgbop --cord 3 2 1 4 5 means blue, green, red, orange, purple.\
+                                                                Note: list of 5 integers regardless the number of projections! And first color is 1!!', 
+                                                          default=[1,2,3,4,5])
+parser.add_argument('--custc','--custom-colors', nargs='+', help='Custom colors, as in matplotlib. Examples:\n'
+                                                                 '\t--custc red green blue\n'
+                                                                 '\t--custc brown lime indigo', default='None')
 parser.add_argument('-o','--output-file', type=str, help='Path and name of the output file, excluding the format', default='fatbands')
 parser.add_argument('--format', type=str, help='Output file format', choices=['pdf','png'], default='pdf')
 parser.add_argument('--redo','--readlog',  help='Rerun the last command, if plot_fatbands.log file is present. This overrides every other argument!', action='store_true')
@@ -112,24 +122,54 @@ no_proj = args.no_projection
 N_proj = len(args.project)
 
 
-match args.cmap:
-    case 'rgb':
-         colors = plt.cm.Set1.colors
-    case 'dark':
-         colors = plt.cm.Dark2.colors
-    case 'light':
-         colors = plt.cm.Set2.colors
-    case 'accent':
-         colors = plt.cm.Accent.colors
-    case 'plt':
-         colors = plt.cm.tab10.colors
-
-if args.projection_type == 'blend':
-    rgb = np.array([[1,0,0], [0,1,0], [0,0,1]])
-    if args.color_scheme == 'cmy':
-        rgb = 1 - rgb
+# Set colors -----------------------------------------------------------------------------
 
 
+if args.custc == 'None':
+
+    # choices=['rgbpo','palergbpo','darkrgbpo','pastelrgbpo','tobpg','darktobpg','pasteltobpg','accent','pltdefault'], default='darkrgbpo'
+    match args.cmap:
+        case 'rgbpo':
+             colors = [[1,0,0], [0,1,0], [0,0,1], [0.58,0.40,0.74], [1, 0.50, 0.14]]
+             color_names = {0: 'red', 1: 'green', 2: 'blue', 3: 'purple', 4: 'orange'}
+        case 'palergbpo':
+             colors = [plt.cm.Set1.colors[i] for i in range(5)]
+             color_names = {0: 'red', 1: 'green', 2: 'blue', 3: 'purple', 4: 'orange'}
+        case 'darkrgbpo':
+             colors = [mcolors.BASE_COLORS['r'],mcolors.BASE_COLORS['g'],mcolors.BASE_COLORS['b'], mcolors.BASE_COLORS['m'], mcolors.BASE_COLORS['c']]
+             color_names = {0: 'red', 1: 'green', 2: 'blue', 3: 'purple', 4: 'orange'}
+        case 'pastelrgbpo':
+             colors = [plt.cm.Pastel1.colors[i] for i in range(5)]
+             color_names = {0: 'red', 1: 'green', 2: 'blue', 3: 'purple', 4: 'orange'}
+        case 'tobpg':
+             colors = [plt.cm.Set2.colors[i] for i in range(5)]
+             color_names = {0: 'teal', 1: 'orange', 2: 'blue', 3: 'pink', 4: 'green'}
+        case 'darktobpg':
+             colors = [plt.cm.Dark2.colors[i] for i in range(5)]
+             color_names = {0: 'teal', 1: 'orange', 2: 'blue', 3: 'pink', 4: 'green'}
+        case 'pasteltobpg':
+             colors = [plt.cm.pastel1.colors[i] for i in range(5)]
+             color_names = {0: 'teal', 1: 'orange', 2: 'blue', 3: 'pink', 4: 'green'}
+        case 'accent':
+             colors = [plt.cm.Accent.colors[i] for i in range(5)]
+             color_names = {0: 'green', 1: 'liliac', 2: 'orange', 3: 'yellow', 4: 'blue'}
+        case 'pltdefault':
+             colors = [plt.cm.tab10.colors[i] for i in range(5)]
+             color_names = {0: 'blue', 1: 'orange', 2: 'green', 3: 'red', 4: 'purple'}
+
+    if args.projection_type == 'blend':
+        colors = np.array([[1,0,0], [0,1,0], [0,0,1]])
+        color_names = {0: 'red', 1: 'green', 2: 'blue'}
+        if args.c_mode == 'cmy':
+            colors = 1 - colors
+            color_names = {0: 'cyan', 1: 'magenta', 2: 'yellow'}
+
+else:
+    colors = [ mcolors.CSS4_COLORS[cval] for cval in args.custc ] 
+
+color_order = {0: args.cord[0]-1, 1: args.cord[1]-1, 2: args.cord[2]-1, 3: args.cord[3]-1, 4: args.cord[4]-1}
+
+# ----------------------------------------------------------------------------------------
 
 
 def CheckInput():
@@ -159,15 +199,15 @@ def plotcircles(ax, KPOINTS, band_energies, contrib, index):
     if args.split is False and args.projection_type == 'stack':
         sizes = args.bs * contrib[:,:,index:3].sum(axis=2)**2
     elif args.split is True:
-        sizes = args.bs * contrib
+        sizes = args.bs * contrib**2
         for be in band_energies:
             ax.plot(KPOINTS,be,lw=0.5,color='k')
 
     for bidx,be in enumerate(band_energies):
         if args.projection_type == 'blend':
-            ax.scatter(KPOINTS,be,s=args.bs,color=rgb[index],alpha=contrib[bidx,:,index]**2,edgecolor='none')
+            ax.scatter(KPOINTS,be,s=args.bs/2,color=colors[color_order[index]],alpha=contrib[bidx,:,index]**2,edgecolor='none')
         elif  args.projection_type == 'stack':
-            ax.scatter(KPOINTS,be,s=sizes[bidx],color=colors[index],alpha=args.ba,edgecolor='none')
+            ax.scatter(KPOINTS,be,s=sizes[bidx],color=colors[color_order[index]],alpha=args.ba,edgecolor='none')
 
     
 
@@ -225,8 +265,8 @@ def CalculateProjectionsAndPlot():
     print(f'\tBands are projected into {N_proj} contributions:')
     logging.info(f'Bands are projected into {N_proj} contributions:')
     for color_idx, color_contrib in enumerate(el_orbs_labels):
-        print(f'\t    - color {color_idx} (rgb={np.around(colors[color_idx],1)}):\t{color_contrib}')
-        logging.info(f'\t-color {color_idx} (rgb={np.around(colors[color_idx],2)}):\t{color_contrib}')
+        print(f'\t    - color {color_names[color_order[color_idx]]}:\t{color_contrib}')
+        logging.info(f'\t-color {color_names[color_order[color_idx]]}:\t{color_contrib}')
 
     print(f'\tNormalization mode is: \'{args.normalization}\'')
     print(f'\tProjection type is: \'{args.projection_type}\'')
@@ -278,7 +318,7 @@ def CalculateProjectionsAndPlot():
                     for i in element_indexes:
                         for j in orbital_indexes:
                             contrib_bands[b,k,color_idx] += data[Spin.up][k][b+min_band_to_plot][i][j]**2
-                            if k == 0 and b == min_band_to_plot:	# needs to be done just once 
+                            if k == 0 and b == 0:	# needs to be done just once 
                                 contrib_dos[color_idx] += np.array(dosrun.pdos[i][Orbital(j)][Spin.up])
 
             # normalization
@@ -323,7 +363,7 @@ def CalculateProjectionsAndPlot():
                     proj_n)
                 
                 ax_DOS.plot(contrib_dos[proj_n],dosrun.tdos.energies - dosrun.efermi, \
-                    c=colors[proj_n], label = f'${el_orbs_labels[proj_n]}$', linewidth = args.dlw)
+                    c=colors[color_order[proj_n]], label = f'${el_orbs_labels[proj_n]}$', linewidth = args.dlw)
 
         elif args.projection_type == 'blend':
             for proj_n in range(N_proj):
@@ -334,12 +374,12 @@ def CalculateProjectionsAndPlot():
                     proj_n)
 
             ax_DOS.plot(contrib_dos[0],dosrun.tdos.energies - dosrun.efermi, \
-                   c=rgb[0], label = f'${el_orbs_labels[0]}$', linewidth = args.dlw)
+                   c=colors[color_order[0]], label = f'${el_orbs_labels[0]}$', linewidth = args.dlw)
             ax_DOS.plot(contrib_dos[1],dosrun.tdos.energies - dosrun.efermi, \
-                   c=rgb[1], label = f'${el_orbs_labels[1]}$', linewidth = args.dlw)
+                   c=colors[color_order[1]], label = f'${el_orbs_labels[1]}$', linewidth = args.dlw)
             if len(el_orbs) == 3:
                ax_DOS.plot(contrib_dos[2],dosrun.tdos.energies - dosrun.efermi, \
-                   c=rgb[2], label = f'${el_orbs_labels[2]}$', linewidth = args.dlw)
+                   c=colors[color_order[2]], label = f'${el_orbs_labels[2]}$', linewidth = args.dlw)
 
     else:
         for proj_n in range(N_proj):
@@ -352,7 +392,7 @@ def CalculateProjectionsAndPlot():
 
             # plot DOS
             ax_DOS.plot(contrib_dos[proj_n],dosrun.tdos.energies - dosrun.efermi, \
-                c=colors[proj_n], label = f'${el_orbs_labels[proj_n]}$', linewidth = args.dlw)
+                c=colors[color_order[proj_n]], label = f'${el_orbs_labels[proj_n]}$', linewidth = args.dlw)
 
     # --------------------------------------------------------------------------
 
@@ -512,7 +552,7 @@ if __name__ == "__main__":
         ax_bands.grid(lw=args.glw,alpha=0.5)
         ax_bands.hlines(y=0, xmin=0, xmax=len(bands.kpoints), color="k", lw=args.flw)
         for i in range(step,len(KPOINTS)+step,step):
-            ax_bands.vlines(KPOINTS[i-1], emin, emax, "k",lw=args.vlw)
+            ax_bands.vlines(KPOINTS[i-1], emin, emax, "k",lw=args.vlw,alpha=args.vla)
         ax_bands.set_xticks(TICKS)
         ax_bands.set_xticklabels(labels)
         ax_bands.tick_params(axis='x', which='both', length=0, pad=5)
@@ -524,7 +564,7 @@ if __name__ == "__main__":
             axis.grid(lw=args.glw,alpha=0.5)
             axis.hlines(y=0, xmin=0, xmax=len(bands.kpoints), color="k", lw=args.flw)
             for i in range(step,len(KPOINTS)+step,step):
-                axis.vlines(KPOINTS[i-1], emin, emax, "k",lw=args.vlw)
+                axis.vlines(KPOINTS[i-1], emin, emax, "k",lw=args.vlw,alpha=args.vla)
             axis.set_xticks(TICKS)
             axis.set_xticklabels(labels)
             axis.tick_params(axis='x', which='both', length=0, pad=5)
@@ -561,7 +601,7 @@ if __name__ == "__main__":
 
     
     ax_DOS.set_yticklabels([])
-    ax_DOS.grid(lw=args.glw,alpha=0.5)
+    ax_DOS.grid(lw=args.glw,alpha=args.gla)
     ax_DOS.set_xticks([])
     ax_DOS.set_xlim(0,maxdos)
     ax_DOS.hlines(y=0, xmin=0, xmax=maxdos, color="k", lw=args.flw)
