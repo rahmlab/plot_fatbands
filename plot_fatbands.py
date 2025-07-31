@@ -66,9 +66,9 @@ parser.add_argument('-H','--height', type=float, help='Height of the plot in inc
 parser.add_argument('-W','--width', type=float, help='Width of the plot in inches', default=3.3)
 parser.add_argument('-r','--ratio', type=float, help='Bandplot - dosplot width ratio', default=3.0)
 parser.add_argument('--blw','--band-lw', type=float, help='Linewidth of non-projected bands', default=2.0)
-parser.add_argument('--bs','--band-size', type=float, help='Circle size of bands, when projection is on.', default=8.0)
+parser.add_argument('--bs','--band-size', type=float, help='Circle size of bands, when projection is on.', default=2.0)
 parser.add_argument('--ba','--band-alpha', type=float, help='alpha value (transparency) of bands', default=1.0)
-parser.add_argument('--dlw','--dos-lw', type=float, help='Linewidth of DOS', default=1.0)
+parser.add_argument('--dlw','--dos-lw', type=float, help='Linewidth of DOS', default=1.25)
 parser.add_argument('--flw','--Fermi-lw', type=float, help='Linewidth of Fermi level. Set it to 0 to remove it', default=1.0)
 parser.add_argument('--vlw','--vlines-lw', type=float, help='Linewidth of vertical lines. Set it to 0 to remove them', default=1.0)
 parser.add_argument('--vla','--vlines-alpha', type=float, help='alpha value (transparency) of vertical lines.', default=1.0)
@@ -79,8 +79,8 @@ parser.add_argument('--c-mode','--color-mode', type=str,
                                  help='Color mode for blended fatbands. rbg (additive) = red, green, blue; cmy (substractive) = cyan, magenta, yellow.',
                                  choices=['rgb','cmy'], default='rgb')
 parser.add_argument('--cmap','--colormap', type=str, 
-                                 help='Color scheme for stacked fatbands. \"rgbpo\" is red-green-blue-purple-orange;  \"tobpg\" is teal-orange-blue-pink-green.', 
-                                 choices=['rgbpo','palergbpo','darkrgbpo','pastelrgbpo','tobpg','darktobpg','pasteltobpg','accent','pastel','pltdefault'], default='darkrgbpo')
+                                 help='Color scheme for stacked fatbands.', 
+                                 choices=['rgb','saturated','normal','pale','dark','alt','darkalt','accent','plt','sumo'], default='rgb')
 parser.add_argument('--cord','--color-order', nargs='+', type=int, help='If you like to change the color order.\
                                                                 E.g. --cmap rgbop --cord 3 2 1 4 5 means blue, green, red, orange, purple.\
                                                                 Note: list of 5 integers regardless the number of projections! And first color is 1!!', 
@@ -96,17 +96,17 @@ args = parser.parse_args()
 redo = args.redo
 
 if redo is True:
-    if os.path.isfile('plot_fatbands.log') is False:
-        raise ValueError('I cannot rerun: plot_fatbands.log does not exist')
+    if os.path.isfile(f'plot_{args.output_file}.log') is False:
+        raise ValueError(f'I cannot rerun: plot_fatbands_{args.output_file}.log does not exist')
 
-    with open('plot_fatbands.log') as f:
+    with open(f'plot_{args.output_file}.log') as f:
         argstr = f.readline()
 
     args = parser.parse_args(argstr.split()[1:])   
 
 
 logging.basicConfig(
-    filename="plot_fatbands.log",
+    filename=f'plot_{args.output_file}.log',
     level=logging.INFO,
     filemode="w",
     format="%(message)s",
@@ -127,34 +127,39 @@ N_proj = len(args.project)
 
 if args.custc == 'None':
 
-    # choices=['rgbpo','palergbpo','darkrgbpo','pastelrgbpo','tobpg','darktobpg','pasteltobpg','accent','pltdefault'], default='darkrgbpo'
     match args.cmap:
-        case 'rgbpo':
-             colors = [[1,0,0], [0,1,0], [0,0,1], [0.58,0.40,0.74], [1, 0.50, 0.14]]
-             color_names = {0: 'red', 1: 'green', 2: 'blue', 3: 'purple', 4: 'orange'}
-        case 'palergbpo':
-             colors = [plt.cm.Set1.colors[i] for i in range(5)]
-             color_names = {0: 'red', 1: 'green', 2: 'blue', 3: 'purple', 4: 'orange'}
-        case 'darkrgbpo':
-             colors = [mcolors.BASE_COLORS['r'],mcolors.BASE_COLORS['g'],mcolors.BASE_COLORS['b'], mcolors.BASE_COLORS['m'], mcolors.BASE_COLORS['c']]
-             color_names = {0: 'red', 1: 'green', 2: 'blue', 3: 'purple', 4: 'orange'}
-        case 'pastelrgbpo':
-             colors = [plt.cm.Pastel1.colors[i] for i in range(5)]
-             color_names = {0: 'red', 1: 'green', 2: 'blue', 3: 'purple', 4: 'orange'}
-        case 'tobpg':
+        case 'rgb':
+             colors = [[1,0,0], [0,1,0], [0,0,1], [1, 0.50, 0.14], [0.58,0.40,0.74]]
+             color_names = {0: 'red', 1: 'green', 2: 'blue', 3: 'orange', 4: 'purple'}
+        case 'saturated':
+             colors = [mcolors.BASE_COLORS['r'], mcolors.BASE_COLORS['g'], mcolors.BASE_COLORS['b'],
+                       mcolors.TABLEAU_COLORS['tab:orange'], mcolors.BASE_COLORS['m']]
+             color_names = {0: 'red', 1: 'green', 2: 'blue', 3: 'orange', 4: 'magenta'}
+        case 'pale':
+             colors = [mcolors.TABLEAU_COLORS['tab:red'], mcolors.TABLEAU_COLORS['tab:green'], mcolors.TABLEAU_COLORS['tab:blue'],
+                       mcolors.TABLEAU_COLORS['tab:orange'], mcolors.TABLEAU_COLORS['tab:purple']]
+             color_names = {0: 'red', 1: 'green', 2: 'blue', 3: 'orange', 4: 'purple'}
+        case 'normal':
+             colors = [plt.cm.Set1.colors[0], plt.cm.Set1.colors[2], plt.cm.Set1.colors[1], plt.cm.Set1.colors[4], plt.cm.Set1.colors[3]]
+             color_names = {0: 'red', 1: 'green', 2: 'blue', 3: 'orange', 4: 'purple'}
+        case 'dark':
+             colors = [mcolors.CSS4_COLORS['darkred'], mcolors.CSS4_COLORS['darkgreen'], mcolors.CSS4_COLORS['darkblue'], 
+                       mcolors.CSS4_COLORS['chocolate'], mcolors.CSS4_COLORS['purple']]
+             color_names = {0: 'red', 1: 'green', 2: 'blue', 3: 'orange', 4: 'purple'}
+        case 'alt':
              colors = [plt.cm.Set2.colors[i] for i in range(5)]
              color_names = {0: 'teal', 1: 'orange', 2: 'blue', 3: 'pink', 4: 'green'}
-        case 'darktobpg':
+        case 'darkalt':
              colors = [plt.cm.Dark2.colors[i] for i in range(5)]
-             color_names = {0: 'teal', 1: 'orange', 2: 'blue', 3: 'pink', 4: 'green'}
-        case 'pasteltobpg':
-             colors = [plt.cm.pastel1.colors[i] for i in range(5)]
              color_names = {0: 'teal', 1: 'orange', 2: 'blue', 3: 'pink', 4: 'green'}
         case 'accent':
              colors = [plt.cm.Accent.colors[i] for i in range(5)]
              color_names = {0: 'green', 1: 'liliac', 2: 'orange', 3: 'yellow', 4: 'blue'}
-        case 'pltdefault':
+        case 'plt':
              colors = [plt.cm.tab10.colors[i] for i in range(5)]
+             color_names = {0: 'blue', 1: 'orange', 2: 'green', 3: 'red', 4: 'purple'}
+        case 'sumo':
+             colors = ["#3952A3", "#FAA41A", "#67BC47", "#6ECCDD", "#ED2025"]
              color_names = {0: 'blue', 1: 'orange', 2: 'green', 3: 'red', 4: 'purple'}
 
     if args.projection_type == 'blend':
@@ -197,17 +202,16 @@ def CheckInput():
 def plotcircles(ax, KPOINTS, band_energies, contrib, index):
 
     if args.split is False and args.projection_type == 'stack':
-        sizes = args.bs * contrib[:,:,index:3].sum(axis=2)**2
+        sizes = args.bs**2 * contrib[:,:,index:3].sum(axis=2)**2
     elif args.split is True:
-        sizes = args.bs * contrib**2
-        for be in band_energies:
-            ax.plot(KPOINTS,be,lw=0.5,color='k')
+        sizes = args.bs**2 * contrib**2
 
     for bidx,be in enumerate(band_energies):
         if args.projection_type == 'blend':
             ax.scatter(KPOINTS,be,s=args.bs/2,color=colors[color_order[index]],alpha=contrib[bidx,:,index]**2,edgecolor='none')
         elif  args.projection_type == 'stack':
-            ax.scatter(KPOINTS,be,s=sizes[bidx],color=colors[color_order[index]],alpha=args.ba,edgecolor='none')
+            ax.plot(KPOINTS,be,lw=args.blw/4,color='k',alpha=args.ba,zorder=0)
+            ax.scatter(KPOINTS,be,s=sizes[bidx],color=colors[color_order[index]],edgecolor='none')
 
     
 
@@ -261,7 +265,7 @@ def CalculateProjectionsAndPlot():
     else:
         logging.info(f'Normalization mode is {args.normalization}: selected contributions are normalized with respect to all contributions.')
             
-                
+    print(f'\tColormap: {args.cmap}')            
     print(f'\tBands are projected into {N_proj} contributions:')
     logging.info(f'Bands are projected into {N_proj} contributions:')
     for color_idx, color_contrib in enumerate(el_orbs_labels):
@@ -412,7 +416,7 @@ if __name__ == "__main__":
     print(f'\tPlotting fatbands into {args.output_file}.{args.format}. Size: {args.width} x {args.height} inches.')
     if redo is True:
         print(f'\tRedoing previous run: {argstr}',end='')
-    print(f'\tAdditional data is printed into plot_fatbands.log')
+    print(f'\tAdditional data is printed in plot_{args.output_file}.log')
     logging.info(f'Plotting fatbands into {args.output_file}.{args.format}. Size: {args.width} x {args.height} inches.\n')
 
     CheckInput()
@@ -547,9 +551,10 @@ if __name__ == "__main__":
         TICKS.append(KPOINTS[i-1])
     # set y-axis limit
     if args.split is False:
-        ax_bands.set_ylabel(r"$E - E_f$ (eV)",labelpad=-2)   #labelpad might work bad
+        ax_bands.set_ylabel(r"$E - E_f$ (eV)",labelpad=1)   #labelpad might work bad
         ax_bands.set_ylim(emin, emax)
         ax_bands.grid(lw=args.glw,alpha=0.5)
+        ax_bands.set_axisbelow(True)
         ax_bands.hlines(y=0, xmin=0, xmax=len(bands.kpoints), color="k", lw=args.flw)
         for i in range(step,len(KPOINTS)+step,step):
             ax_bands.vlines(KPOINTS[i-1], emin, emax, "k",lw=args.vlw,alpha=args.vla)
@@ -558,10 +563,11 @@ if __name__ == "__main__":
         ax_bands.tick_params(axis='x', which='both', length=0, pad=5)
         ax_bands.set_xlim(0, KPOINTS[-1])
     else:
-        ax_bands[0].set_ylabel(r"$E - E_f$ (eV)",labelpad=-2)   #labelpad might work bad
+        ax_bands[0].set_ylabel(r"$E - E_f$ (eV)",labelpad=1)   #labelpad might work bad
         for axis in ax_bands:
             axis.set_ylim(emin,emax)
             axis.grid(lw=args.glw,alpha=0.5)
+            axis.set_axisbelow(True)
             axis.hlines(y=0, xmin=0, xmax=len(bands.kpoints), color="k", lw=args.flw)
             for i in range(step,len(KPOINTS)+step,step):
                 axis.vlines(KPOINTS[i-1], emin, emax, "k",lw=args.vlw,alpha=args.vla)
@@ -602,10 +608,11 @@ if __name__ == "__main__":
     
     ax_DOS.set_yticklabels([])
     ax_DOS.grid(lw=args.glw,alpha=args.gla)
+    ax_DOS.tick_params('y', length=0, width=1, which='major')
     ax_DOS.set_xticks([])
     ax_DOS.set_xlim(0,maxdos)
     ax_DOS.hlines(y=0, xmin=0, xmax=maxdos, color="k", lw=args.flw)
-    ax_DOS.set_xlabel("DOS")
+    ax_DOS.set_xlabel("DOS",labelpad=5)
 
     # Plotting 
     # -----------------
