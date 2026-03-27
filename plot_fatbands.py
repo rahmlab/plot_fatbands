@@ -30,7 +30,7 @@ parser = argparse.ArgumentParser(prog='plot_fatbands.py',description=("Plot proj
 									,formatter_class=SaneFormatter)
 parser.add_argument('-B','--vasprun-file-bands', type=str, help='Path of the vasprun.xml file of the band calculation', default='vasprun.xml')
 parser.add_argument('-K','--KPOINTS-file', type=str, help='Path of the KPOINTS file with the band path', default='KPOINTS')
-parser.add_argument('-C','--POSCAR-file', type=str, help='Path of the POSCAR file', default='../POSCAR')
+parser.add_argument('-C','--POSCAR-file', type=str, help='Path of the POSCAR file', default='../POSCAR') 
 parser.add_argument('-O','--PROCAR-file', type=str, help='Path of the PROCAR file from the band calculation', default='PROCAR')
 parser.add_argument('-P','--POTCAR-file', type=str, help='Path of the POTCAR file', default='../../POTCAR')
 parser.add_argument('-D','--vasprun-file-dos', type=str, help='Path of the vasprun.xml file of the dos calculation', default='../dos/vasprun.xml')
@@ -73,7 +73,8 @@ parser.add_argument('--flw','--Fermi-lw', type=float, help='Linewidth of Fermi l
 parser.add_argument('--vlw','--vlines-lw', type=float, help='Linewidth of vertical lines. Set it to 0 to remove them', default=1.0)
 parser.add_argument('--vla','--vlines-alpha', type=float, help='alpha value (transparency) of vertical lines.', default=1.0)
 parser.add_argument('--glw','--grid-lw', type=float, help='Linewidth of grid. Set it to 0 to remove them', default=1.0)
-parser.add_argument('--gla','--grid-alpha', type=float, help='alpha value (transparency) of grid lines.', default=1.0)
+parser.add_argument('--gla','--grid-alpha', type=float, help='alpha value (transparency) of grid lines.', default=0.5)
+parser.add_argument('--nofermi',help='Show E_max instead of E_F as the Fermi level',action='store_true')
 parser.add_argument('-f','--font-size', type=float, help='Fontsize', default=7)
 parser.add_argument('--c-mode','--color-mode', type=str,  
                                  help='Color mode for blended fatbands. rbg (additive) = red, green, blue; cmy (substractive) = cyan, magenta, yellow.',
@@ -321,7 +322,7 @@ def CalculateProjectionsAndPlot():
 
                     for i in element_indexes:
                         for j in orbital_indexes:
-                            contrib_bands[b,k,color_idx] += data[Spin.up][k][b+min_band_to_plot][i][j]**2
+                            contrib_bands[b,k,color_idx] += data[Spin.up][k][b+min_band_to_plot][i][j] #**2
                             if k == 0 and b == 0:	# needs to be done just once 
                                 contrib_dos[color_idx] += np.array(dosrun.pdos[i][Orbital(j)][Spin.up])
 
@@ -337,7 +338,7 @@ def CalculateProjectionsAndPlot():
                 tot = 0.0
                 for i in range(len(atom_labels)):
                     for j in range(0,max_l_index):
-                        tot += data[Spin.up][k][b+min_band_to_plot][i][j]**2
+                        tot += data[Spin.up][k][b+min_band_to_plot][i][j] #**2
                 if tot != 0:
                     contrib_bands[b,k,:] = contrib_bands[b,k,:]/tot
                 #else:
@@ -531,6 +532,7 @@ if __name__ == "__main__":
         min_band_to_plot = min(min_band_to_plot, np.min(np.where(bands.bands[spin] >= emin + bands.efermi)[0]))
         max_band_to_plot = max(max_band_to_plot, np.max(np.where(bands.bands[spin] <= emax + bands.efermi)[0]))
 
+
     print(f'\tPlotting bands from {emin} to {emax} eV, band numbers from {min_band_to_plot+1} to {max_band_to_plot+1}')
 
     reciprocal = bands.lattice_rec.matrix/(2*math.pi)
@@ -551,9 +553,12 @@ if __name__ == "__main__":
         TICKS.append(KPOINTS[i-1])
     # set y-axis limit
     if args.split is False:
-        ax_bands.set_ylabel(r"$E - E_f$ (eV)",labelpad=1)   #labelpad might work bad
+        if args.nofermi is False:
+            ax_bands.set_ylabel(r"$E - E_F$ (eV)",labelpad=1)   #labelpad might work bad
+        else:
+            ax_bands.set_ylabel(r"$E - E_{max}$ (eV)",labelpad=1)
         ax_bands.set_ylim(emin, emax)
-        ax_bands.grid(lw=args.glw,alpha=0.5)
+        ax_bands.grid(lw=args.glw,alpha=args.gla)
         ax_bands.set_axisbelow(True)
         ax_bands.hlines(y=0, xmin=0, xmax=len(bands.kpoints), color="k", lw=args.flw)
         for i in range(step,len(KPOINTS)+step,step):
@@ -563,10 +568,13 @@ if __name__ == "__main__":
         ax_bands.tick_params(axis='x', which='both', length=0, pad=5)
         ax_bands.set_xlim(0, KPOINTS[-1])
     else:
-        ax_bands[0].set_ylabel(r"$E - E_f$ (eV)",labelpad=1)   #labelpad might work bad
+        if args.nofermi is False:
+            ax_bands[0].set_ylabel(r"$E - E_F$ (eV)",labelpad=1)   #labelpad might work bad
+        else:
+            ax_bands[0].set_ylabel(r"$E - E_{max}$ (eV)",labelpad=1)   #labelpad might work bad
         for axis in ax_bands:
             axis.set_ylim(emin,emax)
-            axis.grid(lw=args.glw,alpha=0.5)
+            axis.grid(lw=args.glw,alpha=args.gla)
             axis.set_axisbelow(True)
             axis.hlines(y=0, xmin=0, xmax=len(bands.kpoints), color="k", lw=args.flw)
             for i in range(step,len(KPOINTS)+step,step):
@@ -607,11 +615,11 @@ if __name__ == "__main__":
 
     
     ax_DOS.set_yticklabels([])
-    ax_DOS.grid(lw=args.glw,alpha=args.gla)
+    ax_DOS.grid(lw=args.glw,alpha=args.gla,zorder=6)
     ax_DOS.tick_params('y', length=0, width=1, which='major')
     ax_DOS.set_xticks([])
     ax_DOS.set_xlim(0,maxdos)
-    ax_DOS.hlines(y=0, xmin=0, xmax=maxdos, color="k", lw=args.flw)
+    ax_DOS.hlines(y=0, xmin=0, xmax=maxdos, color="k", lw=args.flw,zorder=6)
     ax_DOS.set_xlabel("DOS",labelpad=5)
 
     # Plotting 
