@@ -30,10 +30,10 @@ parser = argparse.ArgumentParser(prog='plot_fatbands.py',description=("Plot proj
 									,formatter_class=SaneFormatter)
 parser.add_argument('-B','--vasprun-file-bands', type=str, help='Path of the vasprun.xml file of the band calculation', default='vasprun.xml')
 parser.add_argument('-K','--KPOINTS-file', type=str, help='Path of the KPOINTS file with the band path', default='KPOINTS')
-parser.add_argument('-C','--POSCAR-file', type=str, help='Path of the POSCAR file', default='../POSCAR') 
-parser.add_argument('-O','--PROCAR-file', type=str, help='Path of the PROCAR file from the band calculation', default='PROCAR')
-parser.add_argument('-P','--POTCAR-file', type=str, help='Path of the POTCAR file', default='../../POTCAR')
-parser.add_argument('-D','--vasprun-file-dos', type=str, help='Path of the vasprun.xml file of the dos calculation', default='../dos/vasprun.xml')
+parser.add_argument('-C','--POSCAR-file', type=str, help='Path of the POSCAR file', default='../POSCAR')  # '
+parser.add_argument('-O','--PROCAR-file', type=str, help='Path of the PROCAR file from the band calculation', default='PROCAR')  
+parser.add_argument('-P','--POTCAR-file', type=str, help='Path of the POTCAR file', default='../../POTCAR') # '
+parser.add_argument('-D','--vasprun-file-dos', type=str, help='Path of the vasprun.xml file of the dos calculation', default='../dos/vasprun.xml') # '
 parser.add_argument('-p','--project', help='Band projections. Accepts 1-5 arguments. Nomenclature:\n'
 													'\t- E/n: all orbitals of element with symbol E (H, C, N, ...) or atom index n (1, 2, ...)\n'
                                                     '\t- E/n.o: o-orbital of element with symbol E or atom index n (s, px, py, pz, dxy, ...)\n'
@@ -65,15 +65,17 @@ parser.add_argument('-s','--scale', type=float, help='DOS scale factor', default
 parser.add_argument('-H','--height', type=float, help='Height of the plot in inches', default=3.5)
 parser.add_argument('-W','--width', type=float, help='Width of the plot in inches', default=3.3)
 parser.add_argument('-r','--ratio', type=float, help='Bandplot - dosplot width ratio', default=3.0)
+parser.add_argument('--no-dos',help='Do not plot DOS',action='store_true')
 parser.add_argument('--blw','--band-lw', type=float, help='Linewidth of non-projected bands', default=2.0)
 parser.add_argument('--bs','--band-size', type=float, help='Circle size of bands, when projection is on.', default=2.0)
-parser.add_argument('--ba','--band-alpha', type=float, help='alpha value (transparency) of bands', default=1.0)
+parser.add_argument('--ba','--band-alpha', type=float, help='Alpha value (opacity) of bands', default=1.0)
 parser.add_argument('--dlw','--dos-lw', type=float, help='Linewidth of DOS', default=1.25)
 parser.add_argument('--flw','--Fermi-lw', type=float, help='Linewidth of Fermi level. Set it to 0 to remove it', default=1.0)
 parser.add_argument('--vlw','--vlines-lw', type=float, help='Linewidth of vertical lines. Set it to 0 to remove them', default=1.0)
-parser.add_argument('--vla','--vlines-alpha', type=float, help='alpha value (transparency) of vertical lines.', default=1.0)
+parser.add_argument('--vla','--vlines-alpha', type=float, help='Alpha value (opacity) of vertical lines.', default=1.0)
 parser.add_argument('--glw','--grid-lw', type=float, help='Linewidth of grid. Set it to 0 to remove them', default=1.0)
-parser.add_argument('--gla','--grid-alpha', type=float, help='alpha value (transparency) of grid lines.', default=0.5)
+parser.add_argument('--gla','--grid-alpha', type=float, help='Alpha value (opacity) of grid lines.', default=0.5)
+parser.add_argument('--lega','--legend-alpha', type=float, help='Alpha value (opacity) of legend background.', default=0.6)
 parser.add_argument('--nofermi',help='Show E_max instead of E_F as the Fermi level',action='store_true')
 parser.add_argument('-f','--font-size', type=float, help='Fontsize', default=7)
 parser.add_argument('--c-mode','--color-mode', type=str,  
@@ -81,7 +83,7 @@ parser.add_argument('--c-mode','--color-mode', type=str,
                                  choices=['rgb','cmy'], default='rgb')
 parser.add_argument('--cmap','--colormap', type=str, 
                                  help='Color scheme for stacked fatbands.', 
-                                 choices=['rgb','saturated','normal','pale','dark','alt','darkalt','accent','plt','sumo'], default='rgb')
+                                 choices=['rgb','saturated','normal','pale','dark','alt','darkalt','accent','plt','sumo'], default='normal')
 parser.add_argument('--cord','--color-order', nargs='+', type=int, help='If you like to change the color order.\
                                                                 E.g. --cmap rgbop --cord 3 2 1 4 5 means blue, green, red, orange, purple.\
                                                                 Note: list of 5 integers regardless the number of projections! And first color is 1!!', 
@@ -172,6 +174,8 @@ if args.custc == 'None':
 
 else:
     colors = [ mcolors.CSS4_COLORS[cval] for cval in args.custc ] 
+    color_names = {colidx:None for colidx in range(5)}
+    color_names = {colidx:custcolorname for colidx,custcolorname in enumerate(args.custc)}
 
 color_order = {0: args.cord[0]-1, 1: args.cord[1]-1, 2: args.cord[2]-1, 3: args.cord[3]-1, 4: args.cord[4]-1}
 
@@ -593,7 +597,7 @@ if __name__ == "__main__":
     if no_proj is False:
         CalculateProjectionsAndPlot()
         DOSlabel='total'
-        ax_DOS.legend(fancybox=False, shadow=False, prop={'size': args.font_size-1},labelspacing=0.15,borderpad=0.20,handlelength=1.2,framealpha=0.6)
+        ax_DOS.legend(fancybox=False, shadow=False, prop={'size': args.font_size-1},labelspacing=0.15,borderpad=0.20,handlelength=1.2,framealpha=args.lega)
     else:
         print('\tNo projection requested. Plotting normal bands.')
         for b in range(min_band_to_plot,max_band_to_plot+1): 
@@ -605,7 +609,7 @@ if __name__ == "__main__":
         color = (0.7, 0.7, 0.7),
         facecolor = (0.7, 0.7, 0.7))
     ax_DOS.plot(dosrun.tdos.densities[Spin.up],
-        dosrun.tdos.energies - dosrun.efermi,
+       	dosrun.tdos.energies - dosrun.efermi,
         color = (0.6, 0.6, 0.6),
         label = DOSlabel, lw=args.dlw)
 
